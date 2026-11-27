@@ -58,6 +58,13 @@ class Settlement(Base):
     area: Mapped[object] = mapped_column(Geometry(geometry_type='POLYGON', srid=SRID))
 
 
+class EvacuationPoint(Base):
+    __tablename__ = 'evacuation_points'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=True)
+    geom: Mapped[object] = mapped_column(Geometry(geometry_type='POINT', srid=SRID))
+
+
 # A road is a segment between two ends: end1 and end2. Each end is
 # either a dead end or a crossroad where this road meets other roads. We model
 # it with two many-to-many links, one association table per end

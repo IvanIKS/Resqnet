@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from api import disaster, evacuation_point
 from database import init_db
 
 
@@ -13,6 +14,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+app.include_router(disaster.router)
+app.include_router(evacuation_point.router)
 
 
 @app.get("/api/health")
