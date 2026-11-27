@@ -4,7 +4,7 @@ from geoalchemy2 import Geometry
 from sqlalchemy import Column, Table
 from sqlalchemy.orm import Mapped, mapped_column, relationship, DeclarativeBase
 from sqlalchemy.sql.schema import ForeignKey
-from sqlalchemy.sql.sqltypes import Integer, String, DateTime
+from sqlalchemy.sql.sqltypes import BigInteger, Integer, String, DateTime
 
 # SRID 4326 == WGS84 (lon/lat), the standard for GPS / web-map data.
 SRID = 4326
@@ -91,6 +91,11 @@ class Road(Base):
     geom: Mapped[object] = mapped_column(Geometry(geometry_type='LINESTRING', srid=SRID))
     end1: Mapped[object] = mapped_column(Geometry(geometry_type='POINT', srid=SRID))
     end2: Mapped[object] = mapped_column(Geometry(geometry_type='POINT', srid=SRID))
+
+    # OSM endpoint node IDs and comma-separated way IDs from the simplified edge.
+    osm_u: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    osm_v: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    osm_way_ids: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Roads meeting this one at end1 / at end2. Two separate many-to-many
     # relationships, one per end.

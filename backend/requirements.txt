@@ -6,3 +6,14 @@ pydantic==2.14.4
 
 # PostgreSQL / PostGIS driver
 psycopg2-binary==2.9.10
+
+# Map ingestion (EMSR vectors, OSM roads)
+geopandas==1.2.0
+pyogrio==0.13.0
+shapely==2.2.0
+pyproj==3.8.0
+osmnx==2.2.0
+networkx==3.7
+
+# Tests
+pytest==9.2.0
