@@ -18,8 +18,12 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 # Columns added since the first schema (master). create_all() never alters a
 # table that already exists, so init_db() adds these to older databases. All
 # are nullable, which lets ADD COLUMN run on tables that already hold rows.
+# analysis_coverage is a new table; it is listed for databases that got it
+# before valid_until and ingested_at existed.
 ADDED_COLUMNS = {
     "roads": ["osm_u", "osm_v", "osm_way_ids", "oneway"],
+    "disaster_areas": ["kind", "observed_at", "source", "product", "valid_until", "ingested_at"],
+    "analysis_coverage": ["valid_until", "ingested_at"],
 }
 # Indexes added since master; create_all() skips them on existing tables.
 ADDED_INDEXES = {

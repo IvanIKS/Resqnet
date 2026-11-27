@@ -83,6 +83,28 @@ push-повідомлення, SMS тощо). Склад активних нот
 з `lifespan` у [`backend/main.py`](backend/main.py)). Розширення PostGIS
 вмикається образом `postgis/postgis` під час ініціалізації бази.
 
+### Map data: flood and roads (EMSR444 AOI02)
+
+`init_db()` also upgrades a database created by an older `models.py` in place
+(missing nullable columns and indexes), so an old `pgdata` volume keeps
+working. Load the data from `backend/`:
+
+```bash
+export EMSR_ZIP=/path/to/EMSR444_AOI02_DEL_PRODUCT_r1_RTP01_v1_vector.zip
+python -m service.ingestion_flood     # flood -> disaster_areas, AOI + Not Analysed -> analysis_coverage
+python -m service.ingestion_roads     # OSM roads -> roads (cache dir: OSM_CACHE_DIR)
+```
+
+Flood data are append-only: an import adds rows and never overwrites
+earlier ones, and importing the same product again writes nothing. Every row
+has `source`, `product`, `observed_at` (image time, not load time),
+`valid_until` (24 h after the image; `SATELLITE_MAX_AGE_HOURS` can shorten it)
+and `ingested_at`. `service.ingestion_flood.observations_valid_at(session, at)`
+returns what counts at moment `at` (`observed_at <= at < valid_until`); pass
+`2020-06-26T12:00Z` to replay EMSR444. Whatever it does not return is unknown,
+never safe. Details:
+[`backend/SCHEMA_PROPOSAL_disaster_areas.md`](backend/SCHEMA_PROPOSAL_disaster_areas.md).
+
 ## Запуск
 
 Увесь стек піднімається через Docker Compose:

@@ -9,6 +9,7 @@ psycopg2-binary==2.9.10
 
 # Map ingestion (EMSR vectors, OSM roads)
 geopandas==1.2.0
+pandas==3.1.1
 pyogrio==0.13.0
 shapely==2.2.0
 pyproj==3.8.0

@@ -2,6 +2,9 @@
 
 The real work lives in two modules:
   * service.ingestion_flood: Copernicus EMS (EMSR444 AOI02) -> disaster_areas
+    (observed flood) + analysis_coverage (analysed extent, Not Analysed areas),
+    append-only; ``ingestion_flood.observations_valid_at`` gives what counts at
+    a moment
   * service.ingestion_roads: OSM drivable roads -> roads + road_end*_connections
 Each can also be run on its own: ``python -m service.ingestion_flood`` /
 ``python -m service.ingestion_roads`` from ``backend/``.
@@ -19,7 +22,8 @@ class IngestionService:
         self.session_factory = session_factory
 
     def load_satellite_data(self, zip_path=ingestion_flood.DEFAULT_ZIP):
-        """Read the EMSR package and store observed flood polygons."""
+        """Read the EMSR package (path from EMSR_ZIP by default; FileNotFoundError
+        if missing) and append its flood polygons and analysis coverage."""
         records = ingestion_flood.read_package(zip_path)
         return self.ingest_into_database(records)
 
