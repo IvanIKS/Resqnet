@@ -1,0 +1,91 @@
+# ---------------------------------------------------------------------------
+# ResQNet — keep only program-related source files in the repo.
+# ---------------------------------------------------------------------------
+
+# --- Secrets / local config ---
+.env
+.env.*
+!.env.example
+*.local
+
+# --- IDE / editor ---
+.idea/
+.vscode/
+*.iml
+*.swp
+*~
+
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===========================================================================
+# Python (backend)
+# ===========================================================================
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local databases / dumps
+*.sqlite3
+*.db
+
+# ===========================================================================
+# Node / JavaScript (frontend)
+# ===========================================================================
+node_modules/
+.pnp.*
+.yarn/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build output
+/frontend/dist/
+/frontend/build/
+.next/
+.nuxt/
+.cache/
+.vite/
+
+# ===========================================================================
+# Mobile
+# ===========================================================================
+# React Native / Expo
+.expo/
+.expo-shared/
+
+# Android
+*.apk
+*.aab
+*.keystore
+.gradle/
+**/android/local.properties
+**/android/app/build/
+**/android/build/
+
+# iOS
+*.ipa
+ios/Pods/
+**/ios/build/
+
+# Flutter (in case mobile uses it)
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# --- Logs ---
+*.log
