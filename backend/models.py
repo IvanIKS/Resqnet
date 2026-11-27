@@ -4,7 +4,7 @@ from geoalchemy2 import Geometry
 from sqlalchemy import Column, Table
 from sqlalchemy.orm import Mapped, mapped_column, relationship, DeclarativeBase
 from sqlalchemy.sql.schema import ForeignKey
-from sqlalchemy.sql.sqltypes import BigInteger, Integer, String, DateTime
+from sqlalchemy.sql.sqltypes import BigInteger, Boolean, Integer, String, DateTime
 
 # SRID 4326 == WGS84 (lon/lat), the standard for GPS / web-map data.
 SRID = 4326
@@ -72,14 +72,18 @@ road_end1_connections = Table(
     'road_end1_connections',
     Base.metadata,
     Column('road_id', Integer, ForeignKey('roads.id'), primary_key=True),
-    Column('connected_road_id', Integer, ForeignKey('roads.id'), primary_key=True),
+    # Indexed: the primary key leads with road_id, so without this every
+    # DELETE FROM roads scans the whole table for the FK check.
+    Column('connected_road_id', Integer, ForeignKey('roads.id'), primary_key=True, index=True),
 )
 
 road_end2_connections = Table(
     'road_end2_connections',
     Base.metadata,
     Column('road_id', Integer, ForeignKey('roads.id'), primary_key=True),
-    Column('connected_road_id', Integer, ForeignKey('roads.id'), primary_key=True),
+    # Indexed: the primary key leads with road_id, so without this every
+    # DELETE FROM roads scans the whole table for the FK check.
+    Column('connected_road_id', Integer, ForeignKey('roads.id'), primary_key=True, index=True),
 )
 
 
@@ -96,6 +100,9 @@ class Road(Base):
     osm_u: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     osm_v: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     osm_way_ids: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Set by service.ingestion_roads from OSM. True: traffic may only go
+    # end1 -> end2. False: both ways. NULL: unknown, not two-way.
+    oneway: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     # Roads meeting this one at end1 / at end2. Two separate many-to-many
     # relationships, one per end.
