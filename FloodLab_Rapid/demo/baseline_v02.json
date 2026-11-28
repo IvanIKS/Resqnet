@@ -1,0 +1,201 @@
+{
+  "source": "remote",
+  "sources": {
+    "DEM": {
+      "provider": "Copernicus GLO-30 DSM",
+      "tiles": [
+        "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N44_00_E011_00_DEM/Copernicus_DSM_COG_10_N44_00_E011_00_DEM.tif",
+        "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N44_00_E012_00_DEM/Copernicus_DSM_COG_10_N44_00_E012_00_DEM.tif"
+      ],
+      "errors": []
+    },
+    "WorldCover": {
+      "tiles": [
+        "https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/ESA_WorldCover_10m_2021_v200_N42E009_Map.tif",
+        "https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/ESA_WorldCover_10m_2021_v200_N42E012_Map.tif"
+      ],
+      "errors": [],
+      "coverage": 1.0
+    },
+    "reference": "User upload: EMSR664_Forli_1714_flood.geojson",
+    "LISFLOOD-FP": {
+      "runtime_s": 1162.3317676919996,
+      "version": "8.3 ACC CPU",
+      "threads": "1",
+      "sha256": "41fd7893c5236542ae5e7e46addf47b1f41b76eaf2c3fb15cc5a0da9709f82aa",
+      "mass_log_tail": "Time         Tstep      MinTstep   NumTsteps    Area         Vol         Qin         Hds        Qout          Qerror       Verror       Rain-(Inf+Evap)\n1.000        1.0000     1.0000     1                0.0000     111.0816  0.000       0.000      0.000             0.0000       0.0000     111.0816\n86400.000    1.0000     1.0000     86400      41372100.0000 8635462.5168  0.000       0.000      0.000            -0.0000      -0.0000 8635462.5168\n",
+      "log_tail": "***************************\n LISFLOOD-FP 8.3\nRectangular channels only.\n_CALCULATE_Q_MODE 1.\n***************************\n\nLoading parameters... 'case.par'\nDEMfile = terrain.asc\nstartfile = start.asc\nmanningfile = manning.asc\nresroot = flood\ndirroot = results\nacceleration\n\nUsing acceleration formulation for floodplain flow\nsim_time = 86400.000\ninitial_tstep = 1.000\nsaveint = 86400.000\nmassint = 86400.000\noutput_precision = 8\nOutput precision changed to 8\nrainfall = rain.txt\nReading parameters done.\n\nReading command line.\nReading command line done.\n\n\nStart Date: 28/11/2026 \nStart Time: 13:12:37 \n\nLoading DEM336x456\nBL corner\t(258685.739039,4898171.896767)\nNODATA_value\t-9999.000000\nDone.\n\nLoading startfile Done.\n\nNo bcifile used\nNo bdyfile used\nDone.\n\nLoading floodplain Manning's n dataDone.\n\nPorosity off\nLoading time varying rainfallDone.\n\n\nStarting time steps: acceleration mode\n\nloop time 1162.000000\nFinished.\n\n\nFinish Date: 28/11/2026 \nFinish Time: 13:32:0 \n\n\n  Total computation time: 19.38 mins\n\n"
+    }
+  },
+  "notes": [
+    "Initial water depth is zero; historical river or pond storage may be missing.",
+    "WorldCover class 80 is 2021 permanent water; indicative only, not an event-specific water mask.",
+    "Closed domain: water cannot leave; can overestimate flood extent near edges.",
+    "No infiltration loss; no SoilGrids automatic integration.",
+    "Experimental local-inertial approximation; no channel bathymetry, drainage network, levee or full SWE shock solver. Not an operational warning system.",
+    "LISFLOOD-FP ACC native CPU run; both engines share DEM, Manning grid, initial depths and forcing. Closed edges and zero infiltration required. Native runtime includes process startup, not input writing.",
+    "Historical hindcast: forcing and observation are user-supplied; no automatic calibration or claim of forecast skill.",
+    "Shared spatially uniform rain and point discharge series, linearly interpolated; not a distributed meteorological field."
+  ],
+  "shape": [
+    456,
+    336
+  ],
+  "cell_m": 30.0,
+  "bbox": [
+    11.98,
+    44.2,
+    12.1,
+    44.32
+  ],
+  "crs": "EPSG:32633",
+  "mode": "final",
+  "threshold_m": 0.05,
+  "area_km2": 31.8483,
+  "domain_km2": 137.8512,
+  "max_depth_m": 3.6983062619802776,
+  "runtime_s": 440.68400717500026,
+  "steps": 46728,
+  "balance_m3": {
+    "initial": 0.0,
+    "rain": 8635406.97703239,
+    "inflow": 0.0,
+    "infiltration": 0.0,
+    "outflow": 0.0,
+    "final": 8635406.976000143,
+    "residual": 0.0010322462767362595
+  },
+  "metrics": {
+    "tp": 6407,
+    "fp": 25832,
+    "fn": 7006,
+    "tn": 102286,
+    "iou": 0.16325646579182063,
+    "f1": 0.2806886883378603,
+    "precision": 0.19873445206116816,
+    "recall": 0.4776709162752554,
+    "predicted_km2": 29.0151,
+    "observed_km2": 12.0717,
+    "signed_error_km2": 16.9434,
+    "absolute_error_km2": 16.9434,
+    "relative_error_pct": 140.35637068515618,
+    "coverage_km2": 127.3779
+  },
+  "comparison": {
+    "floodlab": {
+      "area_km2": 29.0151,
+      "coverage_km2": 127.3779,
+      "metrics": {
+        "tp": 6407,
+        "fp": 25832,
+        "fn": 7006,
+        "tn": 102286,
+        "iou": 0.16325646579182063,
+        "f1": 0.2806886883378603,
+        "precision": 0.19873445206116816,
+        "recall": 0.4776709162752554,
+        "predicted_km2": 29.0151,
+        "observed_km2": 12.0717,
+        "signed_error_km2": 16.9434,
+        "absolute_error_km2": 16.9434,
+        "relative_error_pct": 140.35637068515618,
+        "coverage_km2": 127.3779
+      },
+      "runtime_s": 440.68400717500026
+    },
+    "lisflood": {
+      "area_km2": 28.9836,
+      "coverage_km2": 127.3779,
+      "metrics": {
+        "tp": 6418,
+        "fp": 25786,
+        "fn": 6995,
+        "tn": 102332,
+        "iou": 0.163728666547616,
+        "f1": 0.2813863252734726,
+        "precision": 0.19929201341448266,
+        "recall": 0.47849101617833445,
+        "predicted_km2": 28.9836,
+        "observed_km2": 12.0717,
+        "signed_error_km2": 16.9119,
+        "absolute_error_km2": 16.9119,
+        "relative_error_pct": 140.09542980690375,
+        "coverage_km2": 127.3779
+      },
+      "runtime_s": 1162.3317676919996,
+      "origin": "native",
+      "error_map_layer": "lisflood_compare"
+    }
+  },
+  "overlay_bounds": [
+    [
+      44.196966240229095,
+      11.973853840147514
+    ],
+    [
+      44.32311473596266,
+      12.105959558245644
+    ]
+  ],
+  "scenario": {
+    "source": "remote",
+    "boundary": "closed",
+    "compare_mode": "final",
+    "bbox": [
+      11.98,
+      44.2,
+      12.1,
+      44.32
+    ],
+    "hours": 24,
+    "rain_mm_h": 0,
+    "infiltration_mm_h": 0,
+    "manning": 0.04,
+    "inflow_m3s": 0,
+    "threshold": 0.05,
+    "source_x": 50,
+    "source_y": 50,
+    "worldcover": true,
+    "exclude_water": true,
+    "confirm_flood_polygons": true,
+    "confirm_coverage": false,
+    "confirm_time": true,
+    "confirm_external": false,
+    "run_lisflood": true,
+    "forcing_csv": "seconds,rain_mm_h,inflow_m3s\n0,2.9,0\n2759,2.9,0\n2761,3.5,0\n6359,3.5,0\n6361,4.6,0\n9959,4.6,0\n9961,5.2,0\n13559,5.2,0\n13561,5.9,0\n17159,5.9,0\n17161,7,0\n20759,7,0\n20761,6.1,0\n24359,6.1,0\n24361,6.2,0\n27959,6.2,0\n27961,4.3,0\n31559,4.3,0\n31561,3,0\n35159,3,0\n35161,2.1,0\n42359,2.1,0\n42361,1.9,0\n45959,1.9,0\n45961,2,0\n49559,2,0\n49561,0.9,0\n53159,0.9,0\n53161,2.4,0\n56759,2.4,0\n56761,0.6,0\n60359,0.6,0\n60361,2.3,0\n63959,2.3,0\n63961,0.1,0\n74759,0.1,0\n74761,0,0\n86400,0,0",
+    "benchmark": {
+      "event": "EMSR664",
+      "product": "EMSR664_AOI01_DEL_PRODUCT_v1",
+      "start": "2023-05-16T17:14:00Z",
+      "end": "2023-05-17T17:14:00Z",
+      "observation": "2023-05-17T17:14:00Z",
+      "forcing_source": "ERA5 via Open-Meteo; uniform rainfall only; zero initial depth; no river inflow",
+      "independent": true
+    }
+  },
+  "input_sha256": {
+    "reference": "742081fe99bff7df1e4148c6302c0a3bf105aa5e5b11eb859df03f2ecf8db5aa",
+    "coverage": "a4d5ed057954a386ca8403f525a38043456a2044e25355e459b2ebdb7a7b397a"
+  },
+  "benchmark": {
+    "event": "EMSR664",
+    "product": "EMSR664_AOI01_DEL_PRODUCT_v1",
+    "start": "2023-05-16T17:14:00Z",
+    "end": "2023-05-17T17:14:00Z",
+    "observation": "2023-05-17T17:14:00Z",
+    "forcing_source": "ERA5 via Open-Meteo; uniform rainfall only; zero initial depth; no river inflow",
+    "independent": true,
+    "reference_sha256": "742081fe99bff7df1e4148c6302c0a3bf105aa5e5b11eb859df03f2ecf8db5aa",
+    "coverage_sha256": "a4d5ed057954a386ca8403f525a38043456a2044e25355e459b2ebdb7a7b397a",
+    "status": "historical hindcast with user-supplied inputs; not an operational forecast"
+  },
+  "lisflood_native": {
+    "runtime_s": 1162.3317676919996,
+    "version": "8.3 ACC CPU",
+    "threads": "1",
+    "sha256": "41fd7893c5236542ae5e7e46addf47b1f41b76eaf2c3fb15cc5a0da9709f82aa",
+    "mass_log_tail": "Time         Tstep      MinTstep   NumTsteps    Area         Vol         Qin         Hds        Qout          Qerror       Verror       Rain-(Inf+Evap)\n1.000        1.0000     1.0000     1                0.0000     111.0816  0.000       0.000      0.000             0.0000       0.0000     111.0816\n86400.000    1.0000     1.0000     86400      41372100.0000 8635462.5168  0.000       0.000      0.000            -0.0000      -0.0000 8635462.5168\n",
+    "log_tail": "***************************\n LISFLOOD-FP 8.3\nRectangular channels only.\n_CALCULATE_Q_MODE 1.\n***************************\n\nLoading parameters... 'case.par'\nDEMfile = terrain.asc\nstartfile = start.asc\nmanningfile = manning.asc\nresroot = flood\ndirroot = results\nacceleration\n\nUsing acceleration formulation for floodplain flow\nsim_time = 86400.000\ninitial_tstep = 1.000\nsaveint = 86400.000\nmassint = 86400.000\noutput_precision = 8\nOutput precision changed to 8\nrainfall = rain.txt\nReading parameters done.\n\nReading command line.\nReading command line done.\n\n\nStart Date: 28/11/2026 \nStart Time: 13:12:37 \n\nLoading DEM336x456\nBL corner\t(258685.739039,4898171.896767)\nNODATA_value\t-9999.000000\nDone.\n\nLoading startfile Done.\n\nNo bcifile used\nNo bdyfile used\nDone.\n\nLoading floodplain Manning's n dataDone.\n\nPorosity off\nLoading time varying rainfallDone.\n\n\nStarting time steps: acceleration mode\n\nloop time 1162.000000\nFinished.\n\n\nFinish Date: 28/11/2026 \nFinish Time: 13:32:0 \n\n\n  Total computation time: 19.38 mins\n\n"
+  },
+  "id": "d75d53a534e74ea2a1d67cfe3fbddda6"
+}
