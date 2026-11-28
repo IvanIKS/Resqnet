@@ -2,6 +2,8 @@
 
 Closed is red (flood evidence), mapped_option is grey ("Not checked", no
 water seen on the image), and unknown is amber hatched ("No current data").
+A field report closes a road only if its Galileo data passed the OSNMA check;
+no report ever opens a road.
 """
 
 from dataclasses import dataclass
@@ -14,15 +16,17 @@ from sqlalchemy.orm import Session
 from models import (
     COVERAGE_KIND_ANALYSIS_EXTENT,
     COVERAGE_KIND_NOT_ANALYSED,
+    FIELD_STATUS_CLOSING,
     SRID,
     AnalysisCoverage,
     DisasterArea,
+    FieldReport,
     Road,
 )
 from service.ingestion_flood import _require_aware, valid_at
 
 RouteStatus = Literal["closed", "mapped_option", "unknown"]
-StatusReason = Literal["untimed_report", "expired", "gap", "error"]
+StatusReason = Literal["untimed_report", "field_report", "expired", "gap", "error"]
 BBox = tuple[float, float, float, float]
 
 
@@ -60,8 +64,24 @@ def road_statuses(
         func.ST_Intersects(AnalysisCoverage.area, Road.geom),
     )
 
+    # Latest OSNMA-authenticated report about the road at ``at``; a later
+    # "passable" report cancels an earlier "blocked", never satellite water.
+    latest_report = (
+        select(FieldReport.status)
+        .where(
+            FieldReport.road_id == Road.id,
+            FieldReport.osnma_verdict == "authenticated",
+            FieldReport.observed_at <= at,
+        )
+        .order_by(FieldReport.observed_at.desc(), FieldReport.id.desc())
+        .limit(1)
+        .correlate(Road)
+        .scalar_subquery()
+    )
+
     classification = case(
         (current_water, "closed"),
+        (latest_report.in_(FIELD_STATUS_CLOSING), "field_report"),
         (untimed_water, "untimed_report"),
         (and_(current_coverage, ~not_analysed), "mapped_option"),
         # A current Not Analysed mask is the current evidence; an older extent must not relabel it.
@@ -78,6 +98,7 @@ def road_statuses(
     statuses = {
         "closed": SegmentStatus("closed"),
         "untimed_report": SegmentStatus("closed", "untimed_report"),
+        "field_report": SegmentStatus("closed", "field_report"),
         "mapped_option": SegmentStatus("mapped_option"),
         "expired": SegmentStatus("unknown", "expired"),
         "gap": SegmentStatus("unknown", "gap"),

@@ -10,6 +10,7 @@ One SQL query classifies every road; the live map and the route use the same fun
 |---|---|---|
 | `closed` | `null` | The whole segment geometry intersects water valid at `at` (`observed_at <= at < valid_until`). |
 | `closed` | `untimed_report` | Intersects a polygon without an observation time (manual report). |
+| `closed` | `field_report` | The latest Galileo OSNMA-authenticated field report about the road at `at` is `blocked` or `flooded`. Rejected and unchecked reports never count; a report never opens a road. |
 | `mapped_option` | `null` | Fully inside a current analysis extent, outside every current Not Analysed mask, no water. UI label: "Not checked" (grey), not "open". |
 | `unknown` | `gap` | Outside current coverage, partly outside, or under a current Not Analysed mask. |
 | `unknown` | `expired` | Only covered by analysis that has expired at `at`. |
