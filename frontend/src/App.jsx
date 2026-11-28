@@ -1,23 +1,35 @@
-import { useEffect, useState } from 'react'
+import { AuthProvider, useAuth } from './context/AuthContext'
+import AuthForm from './components/AuthForm'
 import './App.css'
 
-export default function App() {
-  const [status, setStatus] = useState('checking…')
+function AppContent() {
+  const { user, loading, logout } = useAuth()
 
-  // Ping the backend so we can see the dev proxy is wired up.
-  useEffect(() => {
-    fetch('/api/health')
-      .then((res) => (res.ok ? setStatus('online') : setStatus('error')))
-      .catch(() => setStatus('offline'))
-  }, [])
+  if (loading) {
+    return <div className="auth-page">Loading…</div>
+  }
+
+  if (!user) {
+    return <AuthForm />
+  }
 
   return (
     <main className="app">
       <h1>ResQNet</h1>
-      <p>Disaster response coordination — flood operations.</p>
-      <p className="status">
-        Backend: <span className={`badge ${status}`}>{status}</span>
+      <p>
+        Signed in as <strong>{user.username}</strong> ({user.role})
       </p>
+      <button type="button" className="logout-btn" onClick={logout}>
+        Sign Out
+      </button>
     </main>
+  )
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   )
 }
