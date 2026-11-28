@@ -9,6 +9,7 @@
   - `POST /evacuation-route` accepting `{ lat, lon, at? }`.
   - Two-pass Dijkstra over the cached `Road` graph: `mapped_option` first, then `unknown`, never `closed`; the route is rated by its weakest segment. See [`evacuation-routing.md`](../03-architecture/evacuation-routing.md).
 - **Road status at a moment** (`backend/services/road_status.py`): `closed` / `mapped_option` / `unknown` with a reason, shared by the live map and the route.
+- **Field reports with Galileo OSNMA** (`backend/api/field_report.py`, `backend/services/osnma.py`): `POST/GET /api/reports`; OSNMAlib v3.2.5 checks a recorded Galileo sample (`ublox_authentic` / `forged`). Shown on the live map as `field_report`; only an authenticated `blocked`/`flooded` report closes its road (`reason = field_report`).
 - **Ingestion, Alarm, Notification & Live Map**:
   - Flood & road ingestion (`backend/service/ingestion_flood.py`, `ingestion_roads.py`), live map API (`backend/api/live_map.py`), disaster & evacuation point CRUD.
 
