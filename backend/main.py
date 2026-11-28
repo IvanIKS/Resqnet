@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from services.registry import init_services
 from database import SessionLocal
 from seed import seed
-from api import disaster, evacuation_point, evacuation_route,  live_map
+from api import auth, disaster, evacuation_point, evacuation_route, live_map
 from database import init_db
 
 
@@ -22,6 +22,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+app.include_router(auth.router)
 app.include_router(disaster.router)
 app.include_router(evacuation_point.router)
 app.include_router(live_map.router)

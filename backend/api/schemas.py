@@ -42,6 +42,29 @@ class EvacuationPointOut(BaseModel):
     name: str | None
 
 
+class RegisterIn(BaseModel):
+    username: str = Field(..., min_length=3, max_length=255)
+    password: str = Field(..., min_length=6, max_length=255)
+    role: str = Field(default="mobile_user", description="UserRole.role: dispatcher or mobile_user")
+
+
+class LoginIn(BaseModel):
+    username: str
+    password: str
+
+
+class UserOut(BaseModel):
+    id: int
+    username: str
+    role: str
+
+
+class AuthTokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+
 class EvacuationRouteIn(BaseModel):
     lat: float = Field(..., ge=-90, le=90, description="Latitude (WGS84)")
     lon: float = Field(..., ge=-180, le=180, description="Longitude (WGS84)")
