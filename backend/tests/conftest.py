@@ -4,7 +4,10 @@ Start the stack first (docker compose up -d db), then: pytest
 """
 
 import os
+"""Make backend/ importable (``models``, ``service.*``) however pytest is started."""
+
 import sys
+from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -38,3 +41,7 @@ def client():
     Base.metadata.drop_all(bind=engine)
     with TestClient(app) as c:
         yield c
+
+BACKEND = str(Path(__file__).resolve().parents[1])
+if BACKEND not in sys.path:
+    sys.path.insert(0, BACKEND)
