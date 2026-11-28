@@ -6,28 +6,40 @@ import './style.css'
 import './App.css'
 
 function AppContent() {
-  const { user, loading, logout } = useAuth()
+  const { user, logout } = useAuth()
   const [selectedPoint, setSelectedPoint] = useState(null)
-
-  if (loading) {
-    return <div className="auth-page">Loading…</div>
-  }
-
-  if (!user) {
-    return <AuthForm />
-  }
+  const [showAuth, setShowAuth] = useState(false)
 
   return (
     <main className="map-wrapper">
       <div className="map-user-pill">
-        <span>
-          {user.username} ({user.role})
-        </span>
-        <button type="button" className="map-logout-btn" onClick={logout}>
-          Sign Out
-        </button>
+        {user ? (
+          <>
+            <span>
+              {user.username} ({user.role})
+            </span>
+            <button type="button" className="map-auth-btn" onClick={logout}>
+              Sign Out
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="map-auth-btn"
+            onClick={() => setShowAuth(true)}
+          >
+            Sign In
+          </button>
+        )}
       </div>
+
       <MapView selectedPoint={selectedPoint} onSelectPoint={setSelectedPoint} />
+
+      {showAuth && !user && (
+        <div className="auth-modal-backdrop">
+          <AuthForm onClose={() => setShowAuth(false)} />
+        </div>
+      )}
     </main>
   )
 }
