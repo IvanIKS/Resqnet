@@ -32,10 +32,12 @@ export default function AuthForm() {
     <div className="auth-page">
       <TerminalBackground />
       <form className="auth-card" onSubmit={handleSubmit}>
-        <h1>ResQNet</h1>
-        <p className="auth-subtitle">
-          {mode === 'login' ? 'Sign in to continue' : 'Create an account'}
-        </p>
+        <div className="auth-brand">
+          <div className="brand-wordmark">RESQNET</div>
+          <p className="auth-subtitle">
+            {mode === 'login' ? 'Sign in to continue' : 'Create an account'}
+          </p>
+        </div>
 
         {error && <div className="auth-error">{error}</div>}
 

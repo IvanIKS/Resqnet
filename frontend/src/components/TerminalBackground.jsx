@@ -1,8 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-const TOKENS = [
-  '0', '1', '50.45', '30.52', 'SOS', 'EVAC', 'FLOOD', 'ROUTE', 'SAFE', 'GRID', 'WKT', '4326',
-]
+const WORDS = ['FLOOD', 'WAVE', 'WATER', 'SOS', 'EVAC', '01', '10', '~~~', '≈≈≈']
 
 export default function TerminalBackground() {
   const canvasRef = useRef(null)
@@ -13,18 +11,20 @@ export default function TerminalBackground() {
     const ctx = canvas.getContext('2d')
     const styles = getComputedStyle(document.documentElement)
     const bg = styles.getPropertyValue('--color-bg').trim() || '#f8fafc'
-    const charColor = styles.getPropertyValue('--color-terminal-char').trim() || '#94a3b8'
+    const waveColor = styles.getPropertyValue('--color-primary').trim() || '#2563eb'
+    const foamColor = styles.getPropertyValue('--color-terminal-char').trim() || '#94a3b8'
     const fontFamily = styles.getPropertyValue('--font-mono').trim() || 'monospace'
 
-    const fontSize = 14
-    let columns = 0
-    let drops = []
+    const cellW = 14
+    const cellH = 18
+    let cols = 0
+    let rows = 0
 
     function resize() {
       canvas.width = window.innerWidth
       canvas.height = window.innerHeight
-      columns = Math.floor(canvas.width / fontSize)
-      drops = Array.from({ length: columns }, () => Math.random() * -40)
+      cols = Math.ceil(canvas.width / cellW)
+      rows = Math.ceil(canvas.height / cellH)
     }
 
     resize()
@@ -34,23 +34,31 @@ export default function TerminalBackground() {
     let lastTime = 0
 
     function draw(time) {
-      if (time - lastTime > 55) {
+      if (time - lastTime > 28) {
         lastTime = time
         ctx.fillStyle = bg
-        ctx.globalAlpha = 0.16
         ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.font = `13px ${fontFamily}`
 
-        ctx.globalAlpha = 0.45
-        ctx.fillStyle = charColor
-        ctx.font = `${fontSize}px ${fontFamily}`
+        const surge = (Math.sin(time * 0.00045) + 1) * 0.5
+        const baseLevel = rows * (0.85 - surge * 0.65)
 
-        for (let i = 0; i < drops.length; i++) {
-          const token = TOKENS[Math.floor(Math.random() * TOKENS.length)]
-          ctx.fillText(token, i * fontSize * 3.2, drops[i] * fontSize)
-          if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-            drops[i] = 0
+        for (let c = 0; c < cols; c++) {
+          const waveOffset =
+            Math.sin(c * 0.22 + time * 0.003) * 2.4 +
+            Math.cos(c * 0.11 - time * 0.002) * 1.6
+          const surfaceRow = baseLevel + waveOffset
+
+          for (let r = Math.max(0, Math.floor(surfaceRow)); r < rows; r++) {
+            const depth = r - surfaceRow
+            const isCrest = depth < 1.5
+            ctx.fillStyle = isCrest ? foamColor : waveColor
+            ctx.globalAlpha = isCrest ? 0.55 : Math.min(0.32, 0.1 + depth * 0.015)
+
+            const word = WORDS[(c + r + Math.floor(time * 0.004)) % WORDS.length]
+            const ch = word[(c + r) % word.length]
+            ctx.fillText(ch, c * cellW, r * cellH)
           }
-          drops[i] += 0.55
         }
         ctx.globalAlpha = 1
       }

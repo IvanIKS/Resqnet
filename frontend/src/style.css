@@ -1,18 +1,23 @@
 :root {
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-display: 'Orbitron', var(--font-mono);
 
   --color-bg: #f8fafc;
-  --color-surface: #ffffff;
-  --color-surface-glass: rgba(255, 255, 255, 0.82);
-  --color-surface-muted: #f1f5f9;
-  --color-border: #cbd5e1;
+  --color-surface: rgba(255, 255, 255, 0.72);
+  --color-surface-glass: rgba(255, 255, 255, 0.42);
+  --color-surface-muted: rgba(241, 245, 249, 0.65);
+  --color-border: rgba(203, 213, 225, 0.75);
+  --color-glass-border: rgba(255, 255, 255, 0.78);
+  --color-glass-highlight: rgba(255, 255, 255, 0.9);
+  --color-glass-shadow: rgba(15, 23, 42, 0.1);
   --color-text: #0f172a;
   --color-text-muted: #475569;
   --color-primary: #2563eb;
   --color-primary-text: #ffffff;
-  --color-primary-soft: #eff6ff;
+  --color-primary-soft: rgba(37, 99, 235, 0.12);
+  --color-primary-glow: rgba(37, 99, 235, 0.25);
   --color-terminal-char: #94a3b8;
-  --color-danger-bg: #fef2f2;
+  --color-danger-bg: rgba(254, 242, 242, 0.85);
   --color-danger-text: #b91c1c;
   --color-danger-border: #fecaca;
 }
