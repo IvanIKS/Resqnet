@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 * {
   box-sizing: border-box;
   font-family: var(--font-mono);
@@ -205,4 +206,14 @@
   color: var(--color-text);
   font-size: 0.9rem;
   cursor: pointer;
+}
+
+.map-wrapper {
+  height: 100vh;
+  width: 100vw;
+}
+
+.map-container {
+  height: 100%;
+  width: 100%;
 }

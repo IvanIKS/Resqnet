@@ -17,6 +17,7 @@ services:
 
   backend:
     build: ./backend
+    restart: on-failure
     environment:
       DATABASE_URL: postgresql+psycopg2://resqnet:resqnet@db:5432/resqnet
     ports:

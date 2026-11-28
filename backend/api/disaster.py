@@ -11,13 +11,18 @@ from sqlalchemy.orm import Session
 from api.schemas import DisasterAreaIn, DisasterAreaOut, DisasterIn, DisasterOut
 from database import get_session
 from models import SRID, Disaster, DisasterArea, DisasterType
-from services import alarm
+from services.alarm import AlarmService
+from services.registry import get_alarm_service
 
 router = APIRouter(tags=["disaster"])
 
 
 @router.post("/disaster", response_model=DisasterOut, status_code=201)
-def create_disaster(payload: DisasterIn, session: Session = Depends(get_session)):
+def create_disaster(
+    payload: DisasterIn,
+    session: Session = Depends(get_session),
+    alarm: AlarmService = Depends(get_alarm_service),
+):
     if session.get(DisasterType, payload.disaster_type) is None:
         raise HTTPException(status_code=404, detail="disaster_type not found")
 

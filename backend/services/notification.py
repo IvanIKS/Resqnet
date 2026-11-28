@@ -26,11 +26,16 @@ class LogNotifier:
         )
 
 
-# Registered delivery channels. Add SMS/push/etc. notifiers here.
-NOTIFIERS: list[Notifier] = [LogNotifier()]
+class NotificationService:
+    """Broadcasts an alarm through every registered notifier."""
 
+    def __init__(self, notifiers: list[Notifier] | None = None) -> None:
+        # Default to the log notifier. Add SMS/push/etc. notifiers here.
+        self.notifiers: list[Notifier] = (
+            notifiers if notifiers is not None else [LogNotifier()]
+        )
 
-def dispatch(disaster: Disaster) -> None:
-    """Broadcast the alarm through every registered notifier."""
-    for notifier in NOTIFIERS:
-        notifier.send(disaster)
+    def dispatch(self, disaster: Disaster) -> None:
+        """Broadcast the alarm through every registered notifier."""
+        for notifier in self.notifiers:
+            notifier.send(disaster)
