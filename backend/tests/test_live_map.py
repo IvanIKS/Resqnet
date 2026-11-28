@@ -155,4 +155,18 @@ def test_route_and_map_share_evidence_on_replay(postgis_client):
     }).json()
     assert expired["road_ids"] == route["road_ids"]
     assert (expired["route_status"], expired["reason"], expired["start_in_flood"]) == ("unknown", "expired", False)
-    assert expired["limiting_segment_ids"] == [next_id]
+    # The start is no longer closed at expiry, so it is rated like every other segment.
+    assert expired["limiting_segment_ids"] == [1, next_id]
+
+
+def test_route_never_targets_an_evacuation_point_in_water(postgis_client):
+    client = postgis_client
+    add_roads_and_village()
+    flood(client)  # untimed manual report: WATER covers 26.00-26.10, 48.20-48.30
+    # Inside the water polygon. Before the fix the no-route branch still offered it as the target.
+    assert client.post("/evacuation-point", json={"name": "Wet school", "geom": "POINT(26.09 48.29)"}).status_code == 201
+    map_body = client.get("/api/map/live").json()
+    assert [p["properties"]["in_danger"] for p in by_kind(map_body, "evacuation_point")] == [True]
+    route = client.post("/evacuation-route", json={"lat": 48.6, "lon": 26.6}).json()
+    assert route["status"] == "candidate_fallback" and route["target_point"] is None
+    assert route["route"] is None and route["route_status"] == "unknown"

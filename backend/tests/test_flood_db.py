@@ -223,6 +223,17 @@ def test_road_statuses_use_full_geometry_and_observation_validity(engine):
         }
 
 
+def test_current_not_analysed_mask_beats_an_older_expired_extent(engine):
+    _write(engine, _package(FLOOD, [], observed_at=T0 - 2 * DAY, product="TEST_PRODUCT_v0"))
+    _write(engine, _package(FLOOD, NOT_ANALYSED))
+    with Session(engine) as session:
+        masked = Road(geom=WKTElement("LINESTRING(5 7,6 7)", srid=4326),
+                      end1=WKTElement("POINT(5 7)", srid=4326), end2=WKTElement("POINT(6 7)", srid=4326))
+        session.add(masked)
+        session.flush()
+        assert road_statuses(session, T0 + HOUR) == {masked.id: SegmentStatus("unknown", "gap")}
+
+
 def test_unknown_observation_time_is_never_current(engine):
     _write(engine, _package(FLOOD, NOT_ANALYSED, observed_at=None), now=NOW)
     assert _counts(engine) == {"observed_flood": 3, "analysis_extent": 1, "not_analysed": 1}

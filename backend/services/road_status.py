@@ -64,6 +64,8 @@ def road_statuses(
         (current_water, "closed"),
         (untimed_water, "untimed_report"),
         (and_(current_coverage, ~not_analysed), "mapped_option"),
+        # A current Not Analysed mask is the current evidence; an older extent must not relabel it.
+        (current_coverage, "gap"),
         (expired_coverage, "expired"),
         else_="gap",
     )

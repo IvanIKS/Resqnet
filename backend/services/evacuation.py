@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
 from geoalchemy2 import Geography
-from sqlalchemy import cast, func, select
+from sqlalchemy import cast, exists, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from models import SRID, DisasterArea, EvacuationPoint, Road
@@ -87,12 +87,16 @@ def find_shortest_road_path(
     return None
 
 
+def _in_hazard(geom, at: datetime):
+    """Same water test as the live map's in_danger: current or untimed, boundary included."""
+    return exists().where(
+        or_(valid_at(DisasterArea, at), DisasterArea.observed_at.is_(None)),
+        func.ST_Intersects(DisasterArea.area, geom),
+    )
+
+
 def _is_in_disaster_area(session: Session, point_wkt: str, at: datetime) -> bool:
-    point_geom = func.ST_GeomFromText(point_wkt, SRID)
-    stmt = select(DisasterArea.id).where(
-        valid_at(DisasterArea, at), func.ST_Contains(DisasterArea.area, point_geom),
-    ).limit(1)
-    return session.scalar(stmt) is not None
+    return bool(session.scalar(select(_in_hazard(func.ST_GeomFromText(point_wkt, SRID), at))))
 
 
 def _find_nearest_road_id(session: Session, point_geom) -> Optional[int]:
@@ -101,10 +105,13 @@ def _find_nearest_road_id(session: Session, point_geom) -> Optional[int]:
 
 
 def _find_nearest_evacuation_point(
-    session: Session, point_wkt: str
+    session: Session, point_wkt: str, at: datetime
 ) -> Optional[EvacuationPoint]:
     point_geom = func.ST_GeomFromText(point_wkt, SRID)
-    stmt = select(EvacuationPoint).order_by(func.ST_Distance(EvacuationPoint.geom, point_geom)).limit(1)
+    stmt = (
+        select(EvacuationPoint).where(~_in_hazard(EvacuationPoint.geom, at))
+        .order_by(func.ST_Distance(EvacuationPoint.geom, point_geom), EvacuationPoint.id).limit(1)
+    )
     return session.scalar(stmt)
 
 
@@ -115,9 +122,7 @@ def _find_candidate_point(session: Session, point_wkt: str, at: datetime) -> Opt
     best_coords: Optional[Tuple[float, float]] = None
 
     for end_col in (Road.end1, Road.end2):
-        not_in_disaster = ~select(DisasterArea.id).where(
-            valid_at(DisasterArea, at), func.ST_Contains(DisasterArea.area, end_col),
-        ).exists()
+        not_in_disaster = ~_in_hazard(end_col, at)
         stmt = (
             select(
                 func.ST_Y(end_col).label("lat"),
@@ -159,8 +164,10 @@ def _find_route(
     lengths: dict[int, float], statuses: dict[int, SegmentStatus],
 ) -> tuple[list[int], float] | None:
     # Pass 1: mapped_option only; pass 2: + unknown; closed never (the start is always allowed).
+    # An unknown start is already paid for, so pass 1 may also end on it.
     mapped = {road_id for road_id, status in statuses.items() if status.route_status == "mapped_option"}
-    result = find_shortest_road_path(start, targets, adjacency, lengths, mapped)
+    first = mapped | {start} if statuses[start].route_status == "unknown" else mapped
+    result = find_shortest_road_path(start, targets, adjacency, lengths, first)
     if result is not None:
         return result
 
@@ -208,7 +215,8 @@ def get_evacuation_route(
             statuses = road_statuses(session, at)
             start_in_flood |= statuses[start].route_status == "closed"
             targets: dict[int, EvacuationPoint] = {}
-            for point in session.scalars(select(EvacuationPoint).order_by(EvacuationPoint.id)):
+            points = select(EvacuationPoint).where(~_in_hazard(EvacuationPoint.geom, at))
+            for point in session.scalars(points.order_by(EvacuationPoint.id)):
                 road_id = _find_nearest_road_id(session, point.geom)
                 if road_id is not None and statuses[road_id].route_status != "closed":
                     targets.setdefault(road_id, point)
@@ -236,7 +244,7 @@ def get_evacuation_route(
         status="candidate_fallback", at=at, start_in_flood=start_in_flood, detail=detail,
     )
     try:
-        nearest = _find_nearest_evacuation_point(session, point_wkt)
+        nearest = _find_nearest_evacuation_point(session, point_wkt, at)
         if nearest is not None:
             fallback.status = "evacuation_point_fallback"
             fallback.target_point_id, fallback.target_point_name = nearest.id, nearest.name

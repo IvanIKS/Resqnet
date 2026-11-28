@@ -89,6 +89,16 @@ def test_unknown_start_still_prefers_mapped_and_rates_the_start(route_setup):
     assert result.limiting_segment_ids == [1]
 
 
+def test_unknown_start_that_is_a_target_is_not_skipped_by_the_mapped_pass(route_setup, monkeypatch):
+    session, statuses, _ = route_setup
+    statuses[1] = GAP
+    session.scalars.return_value = [EvacuationPoint(id=7, name="Here"), EvacuationPoint(id=8, name="Far")]
+    monkeypatch.setattr(evacuation, "_find_nearest_road_id", MagicMock(side_effect=[1, 1, 5]))
+    result = evacuation.get_evacuation_route(session, 50.45, 30.52, REPLAY)
+    assert result.road_ids == [1] and result.target_point_id == 7
+    assert (result.route_status, result.reason) == ("unknown", "gap")
+
+
 def test_closed_target_has_no_route_and_uses_candidate_fallback(route_setup, monkeypatch):
     session, statuses, _ = route_setup
     statuses[5] = CLOSED
