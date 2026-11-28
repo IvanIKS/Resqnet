@@ -5,7 +5,7 @@ from geoalchemy2 import Geometry
 from sqlalchemy import CheckConstraint, Column, Table
 from sqlalchemy.orm import Mapped, mapped_column, relationship, DeclarativeBase
 from sqlalchemy.sql.schema import ForeignKey
-from sqlalchemy.sql.sqltypes import BigInteger, Boolean, Integer, String, DateTime
+from sqlalchemy.sql.sqltypes import JSON, BigInteger, Boolean, DateTime, Integer, String
 
 # SRID 4326 == WGS84 (lon/lat), the standard for GPS / web-map data.
 SRID = 4326
@@ -176,3 +176,28 @@ class Road(Base):
         primaryjoin=lambda: Road.id == road_end2_connections.c.road_id,
         secondaryjoin=lambda: Road.id == road_end2_connections.c.connected_road_id,
     )
+
+
+# FieldReport.status values that close the road the report is about.
+FIELD_STATUS_CLOSING = ('blocked', 'flooded')
+
+
+class FieldReport(Base):
+    """A road condition reported from the field, append-only.
+
+    It affects road status only when the attached Galileo navigation data
+    passed the OSNMA check (``osnma_verdict == 'authenticated'``), see
+    services.road_status.
+    """
+    __tablename__ = 'field_reports'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    road_id: Mapped[int | None] = mapped_column(Integer, ForeignKey('roads.id'), nullable=True, index=True)
+    point: Mapped[object] = mapped_column(Geometry(geometry_type='POINT', srid=SRID))
+    # passable | blocked | flooded
+    status: Mapped[str] = mapped_column(String(16))
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    osnma_sample: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # authenticated | rejected | not_checked
+    osnma_verdict: Mapped[str] = mapped_column(String(16), default='not_checked')
+    osnma_detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

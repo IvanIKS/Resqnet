@@ -16,5 +16,12 @@ pyproj==3.8.0
 osmnx==2.2.0
 networkx==3.7
 
+# OSNMAlib runtime dependencies (OSNMAlib itself is fetched in the Dockerfile)
+bitstring==4.3.1
+ecdsa==0.19.1
+pycryptodome==3.23.0
+reedsolo==1.7.0
+pyserial==3.5
+
 # Tests
 pytest==9.2.0

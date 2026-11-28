@@ -1,8 +1,8 @@
 """Live map for the dispatcher UI.
 
 One GeoJSON FeatureCollection with everything the map needs: disaster areas,
-roads (flagged when they cross water), evacuation points and settlements,
-plus a summary block for the dashboard. ``at`` replays the situation at a
+roads with their status, evacuation points, settlements and field reports
+with their Galileo OSNMA verdict, plus a summary block for the dashboard. ``at`` replays the situation at a
 given moment, which is how the demo scrubs through a flood in time.
 """
 
@@ -15,7 +15,9 @@ from sqlalchemy import and_, exists, func, or_, select, true, union
 from sqlalchemy.orm import Session
 
 from database import get_session
-from models import SRID, AnalysisCoverage, Disaster, DisasterArea, EvacuationPoint, Road, Settlement
+from models import (
+    SRID, AnalysisCoverage, Disaster, DisasterArea, EvacuationPoint, FieldReport, Road, Settlement,
+)
 from service.ingestion_flood import _require_aware, valid_at
 from services.road_status import BBox, SegmentStatus, road_statuses
 
@@ -130,6 +132,18 @@ def live_map(
             "population": population, "affected": bool(affected),
         }))
 
+    reports = session.execute(
+        select(FieldReport.id, FieldReport.road_id, FieldReport.status, FieldReport.observed_at,
+               FieldReport.osnma_sample, FieldReport.osnma_verdict, func.ST_AsGeoJSON(FieldReport.point))
+        .where(FieldReport.observed_at <= moment, in_view(FieldReport.point))
+        .order_by(FieldReport.id)
+    ).all()
+    for report_id, road_id, status, observed_at, sample, verdict, geom in reports:
+        features.append(_feature(geom, {
+            "kind": "field_report", "id": report_id, "road_id": road_id, "status": status,
+            "observed_at": observed_at.isoformat(), "osnma_sample": sample, "osnma_verdict": verdict,
+        }))
+
     observations = union(*(
         select(model.source, model.observed_at, model.valid_until).where(valid_at(model, moment))
         for model in (DisasterArea, AnalysisCoverage)
@@ -151,5 +165,8 @@ def live_map(
             "evacuation_points_in_danger": sum(1 for p in points if p[3]),
             "settlements_affected": sum(1 for s in settlements if s[4]),
             "people_affected": affected_people,
+            "reports_total": len(reports),
+            "reports_authenticated": sum(1 for r in reports if r[5] == "authenticated"),
+            "reports_rejected": sum(1 for r in reports if r[5] == "rejected"),
         },
     }

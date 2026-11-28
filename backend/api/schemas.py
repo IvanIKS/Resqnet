@@ -104,3 +104,34 @@ class EvacuationRouteOut(BaseModel):
     target_point: EvacuationPointOut | None = None
     candidate_lat: float | None = None
     candidate_lon: float | None = None
+
+
+class FieldReportIn(BaseModel):
+    road_id: int | None = Field(default=None, description="roads.id the report is about")
+    point: str = Field(..., description="Where it was observed, WKT, e.g. 'POINT(26.05 48.25)'")
+    status: Literal["passable", "blocked", "flooded"]
+    observed_at: datetime | None = Field(
+        default=None, description="ISO 8601 with Z or a UTC offset. Defaults to now (UTC).",
+    )
+    osnma_sample: Literal["ublox_authentic", "forged"] | None = Field(
+        default=None,
+        description="Recorded Galileo navigation data to check with OSNMA. Omit to skip the check.",
+    )
+
+    @field_validator("observed_at")
+    @classmethod
+    def validate_observed_at(cls, value):
+        return None if value is None else _require_aware(value, "observed_at")
+
+
+class FieldReportOut(BaseModel):
+    id: int
+    road_id: int | None
+    lon: float
+    lat: float
+    status: str
+    observed_at: datetime
+    osnma_sample: str | None
+    osnma_verdict: str
+    osnma_detail: dict | None
+    created_at: datetime
