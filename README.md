@@ -102,3 +102,31 @@ docker compose up -d --build
 
 Бекенд під'єднується до бази за змінною середовища `DATABASE_URL`
 (значення для Compose задано в [`docker-compose.yml`](docker-compose.yml)).
+
+## Карта в реальному часі: `GET /api/map/live`
+
+Один GeoJSON `FeatureCollection` з усім, що потрібно мапі диспетчера. У кожного об'єкта є `properties.kind`:
+
+| kind | геометрія | що в properties |
+|------|-----------|-----------------|
+| `disaster_area` | Polygon | `name`, `disaster_id`, `disaster_name`, `since` |
+| `road` | LineString | `flooded` - дорога перетинає воду (`ST_Intersects`) |
+| `evacuation_point` | Point | `name`, `in_danger` - точка всередині зони лиха |
+| `settlement` | Polygon | `name`, `population`, `affected` |
+
+Блок `summary` - цифри для панелі: скільки доріг затоплено, скільки людей у зоні, які точки евакуації під загрозою.
+
+Параметри:
+- `at` - стан на певний момент (ISO 8601). Для демо: прокручуємо повінь у часі.
+- `disaster_id` - лише одне лихо.
+- `bbox=minLon,minLat,maxLon,maxLat` - лише те, що видно на екрані.
+
+Фронт оновлює мапу, запитуючи ендпоінт раз на кілька секунд.
+
+## Тести
+
+Тести ганяються в контейнері, бо на Windows порт 5432 часто зайнятий локальним PostgreSQL:
+
+```
+docker compose run --rm -e TEST_ADMIN_URL=postgresql+psycopg2://resqnet:resqnet@db:5432/resqnet backend sh -c "pip install -q -r requirements-dev.txt && python -m pytest -q tests"
+```
