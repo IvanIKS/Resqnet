@@ -1,6 +1,9 @@
 :root {
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
   --color-bg: #f8fafc;
   --color-surface: #ffffff;
+  --color-surface-glass: rgba(255, 255, 255, 0.82);
   --color-surface-muted: #f1f5f9;
   --color-border: #cbd5e1;
   --color-text: #0f172a;
@@ -8,6 +11,7 @@
   --color-primary: #2563eb;
   --color-primary-text: #ffffff;
   --color-primary-soft: #eff6ff;
+  --color-terminal-char: #94a3b8;
   --color-danger-bg: #fef2f2;
   --color-danger-text: #b91c1c;
   --color-danger-border: #fecaca;

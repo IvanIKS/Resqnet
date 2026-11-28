@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import TerminalBackground from './TerminalBackground'
 
 export default function AuthForm() {
   const { login, register } = useAuth()
@@ -29,6 +30,7 @@ export default function AuthForm() {
 
   return (
     <div className="auth-page">
+      <TerminalBackground />
       <form className="auth-card" onSubmit={handleSubmit}>
         <h1>ResQNet</h1>
         <p className="auth-subtitle">
