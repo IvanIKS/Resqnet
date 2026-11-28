@@ -3,9 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from services.registry import init_services
-from api import disaster, evacuation_point, live_map
-from database import SessionLocal, init_db
+from database import SessionLocal
 from seed import seed
+from api import disaster, evacuation_point, evacuation_route,  live_map
+from database import init_db
 
 
 @asynccontextmanager
@@ -24,6 +25,7 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(disaster.router)
 app.include_router(evacuation_point.router)
 app.include_router(live_map.router)
+app.include_router(evacuation_route.router)
 
 
 @app.get("/api/health")
