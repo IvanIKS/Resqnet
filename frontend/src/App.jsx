@@ -27,7 +27,7 @@ function AppContent() {
           className="map-auth-btn map-signin-floating"
           onClick={() => setShowAuth(true)}
         >
-          Account
+          My account
         </button>
       )}
 
