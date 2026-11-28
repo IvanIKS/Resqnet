@@ -1,3 +1,4 @@
+import pytest
 from datetime import datetime, timezone
 
 from models import AnalysisCoverage, DisasterArea, Road, Settlement
@@ -170,3 +171,39 @@ def test_route_never_targets_an_evacuation_point_in_water(postgis_client):
     route = client.post("/evacuation-route", json={"lat": 48.6, "lon": 26.6}).json()
     assert route["status"] == "candidate_fallback" and route["target_point"] is None
     assert route["route"] is None and route["route_status"] == "unknown"
+
+
+def test_road_graph_is_cached_until_the_roads_change(postgis_client):
+    from sqlalchemy import event
+
+    from services import evacuation
+
+    add_roads_and_village()
+    with SessionLocal() as s:
+        first, second = s.get(Road, 1), s.get(Road, 2)
+        first.end2_roads.append(second)
+        s.commit()
+
+    statements = []
+    with SessionLocal() as s:
+        engine = s.get_bind()
+        listen = lambda *args: statements.append(args[2])  # noqa: E731
+        event.listen(engine, "before_cursor_execute", listen)
+        try:
+            adjacency, lengths = evacuation._load_road_graph(s)
+            cold = len(statements)
+            assert evacuation._load_road_graph(s) == (adjacency, lengths)
+            warm = len(statements) - cold
+        finally:
+            event.remove(engine, "before_cursor_execute", listen)
+    assert adjacency == {1: [2], 2: []}
+    assert lengths[1] == pytest.approx(14_840, rel=0.01)  # 0.2 deg of longitude at 48.25 N
+    assert warm == 2 and cold == warm + 2  # warm: only the version check
+
+    with SessionLocal() as s:
+        s.add(Road(geom=WKTElement("LINESTRING(26.60 48.60, 26.70 48.60)", srid=4326),
+                   end1=WKTElement("POINT(26.60 48.60)", srid=4326),
+                   end2=WKTElement("POINT(26.70 48.60)", srid=4326)))
+        s.commit()
+        adjacency, _ = evacuation._load_road_graph(s)
+    assert set(adjacency) == {1, 2, 3}

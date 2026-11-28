@@ -60,3 +60,13 @@ def postgis_client(api_engine, monkeypatch):
     monkeypatch.setattr(main, "init_db", lambda: database.init_db(api_engine))
     with TestClient(main.app) as client:
         yield client
+
+
+@pytest.fixture(autouse=True)
+def _fresh_road_graph_cache():
+    """Scratch databases restart ids, so a cached graph could match a different test's roads."""
+    from services.evacuation import clear_road_graph_cache
+
+    clear_road_graph_cache()
+    yield
+    clear_road_graph_cache()

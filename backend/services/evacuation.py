@@ -3,15 +3,16 @@
 import heapq
 import json
 import logging
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
 from geoalchemy2 import Geography
-from sqlalchemy import cast, exists, func, or_, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import cast, exists, func, or_, select, union_all
+from sqlalchemy.orm import Session
 
-from models import SRID, DisasterArea, EvacuationPoint, Road
+from models import SRID, DisasterArea, EvacuationPoint, Road, road_end1_connections, road_end2_connections
 from service.ingestion_flood import _require_aware, valid_at
 from services.road_status import RouteStatus, SegmentStatus, StatusReason, road_statuses
 
@@ -141,22 +142,58 @@ def _find_candidate_point(session: Session, point_wkt: str, at: datetime) -> Opt
     return best_coords
 
 
+_graph_lock = threading.Lock()
+_graph_cache: tuple[tuple, Dict[int, List[int]], Dict[int, float]] | None = None
+
+
+def clear_road_graph_cache() -> None:
+    global _graph_cache
+    _graph_cache = None
+
+
+def _road_graph_version(session: Session) -> tuple:
+    """Cheap fingerprint of the stored graph. write_roads deletes and inserts
+    rows with fresh ids, so a replace changes max(id); an append changes the counts."""
+    links = union_all(
+        select(road_end1_connections.c.road_id), select(road_end2_connections.c.road_id),
+    ).subquery()
+    count, max_id = session.execute(select(func.count(Road.id), func.max(Road.id))).one()
+    link_count = session.scalar(select(func.count()).select_from(links))
+    return str(session.get_bind().url), count, max_id, link_count
+
+
 def _load_road_graph(session: Session) -> Tuple[Dict[int, List[int]], Dict[int, float]]:
-    roads = session.scalars(
-        select(Road).options(selectinload(Road.end1_roads), selectinload(Road.end2_roads))
-    ).all()
+    """Adjacency and lengths in metres, built once per graph version.
 
-    length_rows = session.execute(
-        select(Road.id, func.ST_Length(cast(Road.geom, Geography)).label("len_m"))
-    ).all()
-    lengths: Dict[int, float] = {row.id: float(row.len_m or 0.0) for row in length_rows}
+    Callers must not mutate the returned dicts: they are shared between requests.
+    """
+    global _graph_cache
+    version = _road_graph_version(session)
+    cached = _graph_cache
+    if cached is not None and cached[0] == version:
+        return cached[1], cached[2]
 
-    adjacency: Dict[int, List[int]] = {}
-    for road in roads:
-        neighbors = [r.id for r in road.end1_roads] + [r.id for r in road.end2_roads]
-        adjacency[road.id] = neighbors
+    with _graph_lock:
+        cached = _graph_cache
+        if cached is not None and cached[0] == version:
+            return cached[1], cached[2]
 
-    return adjacency, lengths
+        lengths: Dict[int, float] = {
+            road_id: float(length or 0.0)
+            for road_id, length in session.execute(
+                select(Road.id, func.ST_Length(cast(Road.geom, Geography)))
+            )
+        }
+        adjacency: Dict[int, List[int]] = {road_id: [] for road_id in lengths}
+        links = union_all(
+            select(road_end1_connections.c.road_id, road_end1_connections.c.connected_road_id),
+            select(road_end2_connections.c.road_id, road_end2_connections.c.connected_road_id),
+        ).order_by("road_id", "connected_road_id")  # deterministic tie-breaks in Dijkstra
+        for road_id, neighbor in session.execute(links):
+            adjacency.setdefault(road_id, []).append(neighbor)
+
+        _graph_cache = (version, adjacency, lengths)
+        return adjacency, lengths
 
 
 def _find_route(
