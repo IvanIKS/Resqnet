@@ -127,9 +127,11 @@ docker compose up -d --build
 
 ## Маршрутизація евакуації
 
-Ендпоінт `POST /evacuation-route` розраховує маршрут евакуації для координат `(lat, lon)`:
-- Якщо користувач у `DisasterArea`, алгоритм Дейкстры шукає найкоротший шлях по дорогах (`Road`) до `EvacuationPoint`, уникаючи затоплених ділянок (дозволяється старт із найближчої дороги, щоб вийти з поточної точки).
-- Якщо безпечного шляху немає, повертається найближча `EvacuationPoint` диспетчера або кандидат (найближчий незатоплений кінець дороги).
+Ендпоінт `POST /evacuation-route` (тіло `{lat, lon, at?}`, `at` з `Z` або зсувом) розраховує маршрут від найближчої дороги до точки евакуації на момент `at`:
+- Кожна дорога має статус на момент `at`: `closed` (перетинає актуальну воду), `mapped_option` («не перевірено»: в актуальному аналізі води не видно), `unknown` (немає актуальних даних: `gap`, `expired`, `error`). Статусу «безпечно» немає.
+- Дейкстра спершу шукає шлях тільки по `mapped_option`, потім дозволяє `unknown`; `closed` не використовується ніколи (крім стартової ділянки, з якої треба вийти).
+- Статус маршруту = статус найслабшої ділянки; `limiting_segment_ids` показують, що перевірити. `route` - GeoJSON, статус у `properties` кожної ділянки.
+- Якщо шляху немає: найближча суха `EvacuationPoint` або кандидат (кінець дороги поза водою), `route_status = unknown`, `reason = error`.
 
 Детальніше про архітектурні рішення див. у [`brain/`](brain/README.md).
 
@@ -139,15 +141,15 @@ docker compose up -d --build
 
 | kind | геометрія | що в properties |
 |------|-----------|-----------------|
-| `disaster_area` | Polygon | `name`, `disaster_id`, `disaster_name`, `since` |
-| `road` | LineString | `flooded` - дорога перетинає воду (`ST_Intersects`) |
+| `disaster_area` | Polygon | `name`, `disaster_id`, `disaster_name`, `since` (час знімка або `null`), `untimed` |
+| `road` | LineString | `route_status` (`closed` / `mapped_option` / `unknown`), `reason`; `flooded` = `route_status == closed` (лише для сумісності, не для кольору) |
 | `evacuation_point` | Point | `name`, `in_danger` - точка всередині зони лиха |
 | `settlement` | Polygon | `name`, `population`, `affected` |
 
-Блок `summary` - цифри для панелі: скільки доріг затоплено, скільки людей у зоні, які точки евакуації під загрозою.
+Блок `summary` - цифри для панелі: `roads_by_status`, скільки людей у зоні, які точки евакуації під загрозою, `observations` (джерело, `observed_at`, `valid_until` для кожного актуального знімка).
 
 Параметри:
-- `at` - стан на певний момент (ISO 8601). Для демо: прокручуємо повінь у часі.
+- `at` - стан на певний момент (ISO 8601 з `Z` або зсувом, інакше 400). Для демо: `2020-06-27T00:00:00Z`, той самий `at` у карті й маршруті.
 - `disaster_id` - лише одне лихо.
 - `bbox=minLon,minLat,maxLon,maxLat` - лише те, що видно на екрані.
 

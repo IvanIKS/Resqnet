@@ -8,25 +8,22 @@ no server is reachable. Run from backend/: python -m pytest tests -q
 """
 
 import sys
-import uuid
-from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from geoalchemy2 import WKTElement
 from shapely.geometry import LineString, box
-from sqlalchemy import create_engine, inspect, select, text
-from sqlalchemy.engine import make_url
-from sqlalchemy.exc import OperationalError
+from sqlalchemy import inspect, select, text
 from sqlalchemy.orm import Session
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 
 import database  # noqa: E402
-from models import AnalysisCoverage, Disaster, DisasterArea  # noqa: E402
+from models import AnalysisCoverage, Disaster, DisasterArea, Road  # noqa: E402
 from service import ingestion_flood as fl  # noqa: E402
+from services.road_status import SegmentStatus, road_statuses  # noqa: E402
 
-SERVER_URL = make_url(database.DATABASE_URL)
 T0 = datetime(2020, 6, 26, 9, 12, 48, tzinfo=timezone.utc)
 HOUR, DAY = timedelta(hours=1), timedelta(hours=24)
 NOW = datetime(2026, 11, 27, 20, 0, tzinfo=timezone.utc)
@@ -55,37 +52,14 @@ CREATE TABLE disaster_areas (
 """
 
 
-@contextmanager
-def scratch_database():
-    admin = create_engine(SERVER_URL.set(database="postgres"), isolation_level="AUTOCOMMIT",
-                          connect_args={"connect_timeout": 3})
-    name = f"resqnet_test_{uuid.uuid4().hex[:10]}"
-    try:
-        with admin.connect() as conn:
-            conn.execute(text(f'CREATE DATABASE "{name}"'))
-    except OperationalError as exc:
-        admin.dispose()
-        pytest.skip(f"no PostGIS server at {SERVER_URL.host}:{SERVER_URL.port}: {exc.orig}")
-    engine = create_engine(SERVER_URL.set(database=name))
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
-        yield engine
-    finally:
-        engine.dispose()
-        with admin.connect() as conn:
-            conn.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
-        admin.dispose()
-
-
 @pytest.fixture
-def blank_engine():
+def blank_engine(scratch_database):
     with scratch_database() as engine:
         yield engine
 
 
 @pytest.fixture(scope="module")
-def _initialised_engine():
+def _initialised_engine(scratch_database):
     with scratch_database() as engine:
         database.init_db(engine)
         yield engine
@@ -216,6 +190,48 @@ def test_observations_count_from_the_image_time_until_valid_until(engine):
     assert _valid(engine, datetime.now(timezone.utc)) == (0, 0, 0)
     assert _valid(engine, T0 + HOUR, disaster_id=result.disaster_id) == (3, 1, 1)
     assert _valid(engine, T0 + HOUR, disaster_id=result.disaster_id + 1) == (0, 0, 0)
+
+
+def test_road_statuses_use_full_geometry_and_observation_validity(engine):
+    imported = _write(engine, _package(FLOOD, NOT_ANALYSED))
+    with Session(engine) as session:
+        def road(x1, y, x2):
+            return Road(geom=WKTElement(f"LINESTRING({x1} {y},{x2} {y})", srid=4326),
+                        end1=WKTElement(f"POINT({x1} {y})", srid=4326),
+                        end2=WKTElement(f"POINT({x2} {y})", srid=4326))
+
+        wet, mapped, outside, touches_gap, partial, untimed = [
+            road(0.1, 0.25, 0.4), road(1, 2, 2), road(11, 2, 12),
+            road(5, 7, 6), road(9, 4, 11), road(3.25, 2, 3.75),
+        ]
+        session.add_all([wet, mapped, outside, touches_gap, partial, untimed])
+        session.add(DisasterArea(disaster_id=imported.disaster_id, name="Manual report",
+                                 area=WKTElement(box(3, 1, 4, 3).wkt, srid=4326)))
+        session.flush()
+
+        at = datetime(2020, 6, 27, tzinfo=timezone.utc)
+        gap = SegmentStatus("unknown", "gap")
+        expired = SegmentStatus("unknown", "expired")
+        assert road_statuses(session, at) == {
+            wet.id: SegmentStatus("closed"), mapped.id: SegmentStatus("mapped_option"),
+            outside.id: gap, touches_gap.id: gap, partial.id: gap,
+            untimed.id: SegmentStatus("closed", "untimed_report"),
+        }
+        assert road_statuses(session, T0 - HOUR, road_ids={mapped.id}) == {mapped.id: gap}
+        assert road_statuses(session, T0 + DAY, bbox=(0, 0, 2, 3)) == {
+            wet.id: expired, mapped.id: expired,
+        }
+
+
+def test_current_not_analysed_mask_beats_an_older_expired_extent(engine):
+    _write(engine, _package(FLOOD, [], observed_at=T0 - 2 * DAY, product="TEST_PRODUCT_v0"))
+    _write(engine, _package(FLOOD, NOT_ANALYSED))
+    with Session(engine) as session:
+        masked = Road(geom=WKTElement("LINESTRING(5 7,6 7)", srid=4326),
+                      end1=WKTElement("POINT(5 7)", srid=4326), end2=WKTElement("POINT(6 7)", srid=4326))
+        session.add(masked)
+        session.flush()
+        assert road_statuses(session, T0 + HOUR) == {masked.id: SegmentStatus("unknown", "gap")}
 
 
 def test_unknown_observation_time_is_never_current(engine):

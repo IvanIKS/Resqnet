@@ -6,8 +6,9 @@
   - PBKDF2-HMAC-SHA256 password hashing and HS256 JWT tokens.
   - `get_current_user` and `require_role` dependencies (`dispatcher`, `mobile_user`).
 - **Evacuation Routing** (`backend/api/evacuation_route.py`, `backend/services/evacuation.py`):
-  - `POST /evacuation-route` accepting `{ lat, lon }`.
-  - Dijkstra shortest-path over `Road` graph avoiding `DisasterArea` polygons.
+  - `POST /evacuation-route` accepting `{ lat, lon, at? }`.
+  - Two-pass Dijkstra over the cached `Road` graph: `mapped_option` first, then `unknown`, never `closed`; the route is rated by its weakest segment. See [`evacuation-routing.md`](../03-architecture/evacuation-routing.md).
+- **Road status at a moment** (`backend/services/road_status.py`): `closed` / `mapped_option` / `unknown` with a reason, shared by the live map and the route.
 - **Ingestion, Alarm, Notification & Live Map**:
   - Flood & road ingestion (`backend/service/ingestion_flood.py`, `ingestion_roads.py`), live map API (`backend/api/live_map.py`), disaster & evacuation point CRUD.
 

@@ -1,8 +1,12 @@
 """Pydantic request/response schemas for the API layer."""
 
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from service.ingestion_flood import _require_aware
+from services.road_status import RouteStatus, StatusReason
 
 
 class DisasterIn(BaseModel):
@@ -68,10 +72,32 @@ class AuthTokenOut(BaseModel):
 class EvacuationRouteIn(BaseModel):
     lat: float = Field(..., ge=-90, le=90, description="Latitude (WGS84)")
     lon: float = Field(..., ge=-180, le=180, description="Longitude (WGS84)")
+    at: datetime | None = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="ISO 8601 instant with Z or a UTC offset. Defaults to now (UTC).",
+    )
+
+    @field_validator("at", mode="before")
+    @classmethod
+    def validate_at(cls, value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            value = datetime.fromisoformat(value)
+        if not isinstance(value, datetime):
+            raise ValueError("at must be an ISO 8601 datetime with Z or a UTC offset")
+        return _require_aware(value, "at")
 
 
 class EvacuationRouteOut(BaseModel):
-    status: str
+    status: Literal["route_found", "evacuation_point_fallback", "candidate_fallback"]
+    at: datetime
+    route_status: RouteStatus
+    reason: StatusReason | None
+    limiting_segment_ids: list[int]
+    start_in_flood: bool
+    route: dict | None
+    detail: str | None
     in_disaster_area: bool
     road_ids: list[int]
     distance_meters: float | None = None
