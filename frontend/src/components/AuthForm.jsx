@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import TerminalBackground from './TerminalBackground'
 
-export default function AuthForm() {
+export default function AuthForm({ onClose }) {
   const { login, register } = useAuth()
   const [mode, setMode] = useState('login')
   const [username, setUsername] = useState('')
@@ -32,6 +32,16 @@ export default function AuthForm() {
     <div className="auth-page">
       <TerminalBackground />
       <form className="auth-card" onSubmit={handleSubmit}>
+        {onClose && (
+          <button
+            type="button"
+            className="auth-close"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            ×
+          </button>
+        )}
         <div className="auth-brand">
           <div className="brand-wordmark">RESQNET</div>
           <p className="auth-subtitle">
