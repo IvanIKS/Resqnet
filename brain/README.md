@@ -1,6 +1,9 @@
 # ResQNet Brain
 
-Structured project knowledge, architectural decisions, and feature specifications.
+Structured project knowledge, problem statement, implemented features, architectural decisions, and current delivery state.
 
 ## Structure
-- [evacuation-routing.md](evacuation-routing.md) — Evacuation route calculation, flood-avoidance rules, and fallback strategy.
+- [`01-problem/`](01-problem/problem-statement.md) — Problem statement, flood response challenges, and project goals.
+- [`02-product/`](02-product/implemented-features.md) — Implemented backend and frontend features.
+- [`03-architecture/`](03-architecture/decisions.md) — Architectural decisions and [`evacuation-routing.md`](03-architecture/evacuation-routing.md).
+- [`04-delivery/`](04-delivery/current-state.md) — Final state, local/Docker setup, and test status.
