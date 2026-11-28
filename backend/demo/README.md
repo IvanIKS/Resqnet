@@ -2,23 +2,43 @@
 
 From `backend/` in the Windows checkout, use the backend `.venv` and the running
 `resqnet-db-1` PostGIS container on localhost port 5432. The container needs the
-`template_postgis` database. The builder expects these two pinned inputs.
+`template_postgis` database. The builder takes two pinned inputs. Pass each one
+as an option or set its environment variable. The option wins.
 
-- `D:\cassini-review\out\resqnet_aoi02_seed.dump`
-- `D:\cassini-2026\data\raw\EMSR444_AOI02_DEL_PRODUCT_r1_RTP01_v1_vector.zip`
+| Input | Option | Environment variable | SHA-256 |
+| --- | --- | --- | --- |
+| `resqnet_aoi02_seed.dump` (OSM road graph) | `--dump` | `RESQNET_DEMO_DUMP` | `0fe6447cb152cda3d5e43131cffdbb693e38fb7b654a64ea3ba456bc3d6cfbc4` |
+| `EMSR444_AOI02_DEL_PRODUCT_r1_RTP01_v1_vector.zip` (CEMS) | `--zip` | `RESQNET_DEMO_ZIP` | `ef4db492680aeadb8d49cbdb88927e1bda74672142a931cd872c3652cb807759` |
 
-Stop any API connected to `resqnet_demo` before rebuilding. The command verifies
-both SHA-256 hashes, then drops and recreates `resqnet_demo`.
+The builder stops before it touches the database if an input is missing or its
+SHA-256 differs, or if tracked files have uncommitted changes. With `--allow-dirty`
+it builds anyway and records `"git_dirty": true` and `git_diff_sha256`, the
+SHA-256 of `git diff HEAD`, in the fixture. A clean build records
+`"git_dirty": false`. It then drops `resqnet_demo` with `dropdb --force`, which
+also ends open connections such as a running API, and recreates it.
+
+Example with the current input paths on the Windows build machine:
 
 ```powershell
 $env:DATABASE_URL = 'postgresql+psycopg2://resqnet:resqnet@localhost:5432/resqnet_demo'
-.\.venv\Scripts\python.exe -B -m demo.build_demo_db
+.\.venv\Scripts\python.exe -B -m demo.build_demo_db `
+  --dump D:\cassini-review\out\resqnet_aoi02_seed.dump `
+  --zip D:\cassini-2026\data\raw\EMSR444_AOI02_DEL_PRODUCT_r1_RTP01_v1_vector.zip `
+  --fixture-out D:\cassini-2026\analysis\21-demo-fixture.json
 ```
 
-The command writes JSON to stdout and saves the same fixture to
-`D:\cassini-2026\analysis\21-demo-fixture.json`. The fixture records the input
-hashes, Git revision, replay time, viewport, selected click, point and route
-expectations.
+The fixture JSON always goes to stdout. The builder also writes it to a file
+only with `--fixture-out` or `RESQNET_DEMO_FIXTURE_OUT`. The fixture records
+the input hashes, Git revision and dirty flag, replay time, viewport, selected
+click, point and route expectations.
+
+Restart any running API, local or Compose, after a rebuild. Its road-graph
+cache lives in the API process, and a rebuild does not refresh it.
+
+The expected numbers below were measured on the `postgis/postgis:16-3.4` image
+from `docker-compose.yml` (PostgreSQL 16.4, PostGIS 3.4.3). Counts and road IDs
+must match exactly. The fallback route distance of 3,610.40 m may differ by
+less than 0.5 m.
 
 The builder checks the database name and `jit=off`, 26,793 roads and the road
 sequence value of 26,793, 52,009 end1 links, 48,005 end2 links, 349 flood rows,
@@ -37,7 +57,8 @@ omit closed road 48 from the drawn route.
 
 ## Run the API
 
-From `backend/`, start the API after the final rebuild.
+From `backend/`, start the API after the final rebuild. If it was already
+running, restart it.
 
 ```powershell
 $env:DATABASE_URL = 'postgresql+psycopg2://resqnet:resqnet@localhost:5432/resqnet_demo'

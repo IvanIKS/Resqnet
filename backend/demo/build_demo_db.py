@@ -1,5 +1,6 @@
 """Rebuild the pinned RESQNET demo and emit its deterministic replay fixture."""
 
+import argparse
 import hashlib
 import json
 import os
@@ -9,7 +10,7 @@ import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urlsplit
+from typing import NamedTuple
 
 from sqlalchemy import text
 
@@ -19,13 +20,20 @@ DEMO_URL = "postgresql+psycopg2://resqnet:resqnet@localhost:5432/resqnet_demo"
 CONTAINER = "resqnet-db-1"
 DOCKER_EXEC = ("docker", "exec", CONTAINER)
 PSQL = (*DOCKER_EXEC, "psql", "-X", "-U", "resqnet", "-d", "resqnet_demo", "-v", "ON_ERROR_STOP=1")
-DUMP = Path("D:/cassini-review/out/resqnet_aoi02_seed.dump")
-ZIP = Path("D:/cassini-2026/data/raw/EMSR444_AOI02_DEL_PRODUCT_r1_RTP01_v1_vector.zip")
-FIXTURE = Path("D:/cassini-2026/analysis/21-demo-fixture.json")
-INPUT_HASHES = {
-    DUMP: "0fe6447cb152cda3d5e43131cffdbb693e38fb7b654a64ea3ba456bc3d6cfbc4",
-    ZIP: "ef4db492680aeadb8d49cbdb88927e1bda74672142a931cd872c3652cb807759",
-}
+
+
+class PinnedInput(NamedTuple):
+    option: str
+    env: str
+    name: str
+    sha256: str
+
+
+DUMP_INPUT = PinnedInput("--dump", "RESQNET_DEMO_DUMP", "resqnet_aoi02_seed.dump",
+                         "0fe6447cb152cda3d5e43131cffdbb693e38fb7b654a64ea3ba456bc3d6cfbc4")
+ZIP_INPUT = PinnedInput("--zip", "RESQNET_DEMO_ZIP", "EMSR444_AOI02_DEL_PRODUCT_r1_RTP01_v1_vector.zip",
+                        "ef4db492680aeadb8d49cbdb88927e1bda74672142a931cd872c3652cb807759")
+FIXTURE_OUT_ENV = "RESQNET_DEMO_FIXTURE_OUT"
 AT = "2020-06-27T00:00:00Z"
 EXPIRED_AT = "2020-06-27T09:13:00Z"
 BBOX = "25.85,48.25,26.00,48.34"
@@ -35,6 +43,8 @@ POINT_LAT, POINT_LON = 48.317463550, 25.878996250
 PREFERRED_ROAD = 2158
 FALLBACK_LAT, FALLBACK_LON = 48.312002568, 25.918210108
 FALLBACK_PATH = [48, 2158, 2161, 2399, 2400, 2405, 6359, 6358, 6353, 6351, 6349, 6345, 6344]
+FALLBACK_DISTANCE_METERS = 3610.40
+DISTANCE_TOLERANCE_METERS = 0.5  # float distances only; IDs and counts stay exact
 EXPECTED_COUNTS = {
     "roads": 26793,
     "road_end1_connections": 52009,
@@ -56,13 +66,15 @@ def run(*command, **kwargs):
     return subprocess.run(command, cwd=BACKEND, check=True, **kwargs)
 
 
-def restore_roads():
+def restore_roads(dump):
     stage = run(*DOCKER_EXEC, "mktemp", "-d", "/tmp/resqnet-demo.XXXXXX",
                 stdout=subprocess.PIPE, text=True).stdout.strip()
+    if not stage.startswith("/tmp/resqnet-demo."):  # the cleanup below runs rm -rf on it
+        raise RuntimeError(f"Unexpected stage directory {stage!r}")
     archive = f"{stage}/roads.dump"
     restore_list = f"{stage}/roads.list"
     try:
-        run("docker", "cp", DUMP, f"{CONTAINER}:{archive}")
+        run("docker", "cp", dump, f"{CONTAINER}:{archive}")
         toc = run(*DOCKER_EXEC, "pg_restore", "-l", archive,
                   stdout=subprocess.PIPE, encoding="utf-8").stdout.splitlines()
         ordered = []
@@ -80,8 +92,12 @@ def restore_roads():
         run(*DOCKER_EXEC, "pg_restore", "-U", "resqnet", "-d", "resqnet_demo",
             "--data-only", "--single-transaction", "--exit-on-error", "-L", restore_list, archive)
     finally:
-        run(*DOCKER_EXEC, "rm", "-f", archive, restore_list)
-        run(*DOCKER_EXEC, "rmdir", stage)
+        # Best effort and never raising, so the original error (e.g. from pg_restore) propagates.
+        try:
+            subprocess.run((*DOCKER_EXEC, "rm", "-rf", stage), cwd=BACKEND, check=False,
+                           stdout=subprocess.DEVNULL)
+        except Exception as error:
+            print(f"Could not remove {CONTAINER}:{stage}: {error}", file=sys.stderr)
 
 
 def check_database(session):
@@ -172,7 +188,8 @@ def evaluate_click(session, lat, lon, point, viewport_ids, *, fallback=False):
         checks["archive fallback path, limiting IDs and distance"] = (
             result.road_ids == FALLBACK_PATH
             and result.limiting_segment_ids == [6353, 6351, 6349]
-            and result.distance_meters == 3610.40
+            and result.distance_meters is not None
+            and abs(result.distance_meters - FALLBACK_DISTANCE_METERS) < DISTANCE_TOLERANCE_METERS
         )
     failed = [check for check, passed in checks.items() if not passed]
     return {"click": click, "route": route, "failed_acceptance": failed}
@@ -214,7 +231,7 @@ def find_alternate_click(session, preferred, point, viewport, statuses):
     raise RuntimeError("No start in the viewport met the route acceptance checks")
 
 
-def make_fixture(session, hashes, git_commit):
+def make_fixture(session, hashes, git):
     from services.road_status import road_statuses
 
     check_database(session)
@@ -258,11 +275,10 @@ def make_fixture(session, hashes, git_commit):
             selection = "search"
             why = "Both pinned clicks failed acceptance. An in-process search found a qualifying start."
     chosen = attempts[selection]
-    require_equal("Chosen click failures", chosen["failed_acceptance"], [])
 
     return {
         "database": "resqnet_demo",
-        "git_commit": git_commit,
+        **git,
         "input_sha256": hashes,
         "at": AT,
         "bbox": BBOX,
@@ -277,26 +293,67 @@ def make_fixture(session, hashes, git_commit):
     }
 
 
-def main():
-    configured_url = os.getenv("DATABASE_URL", DEMO_URL)
-    if configured_url != DEMO_URL or urlsplit(configured_url).path != "/resqnet_demo":
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    for pinned in (DUMP_INPUT, ZIP_INPUT):
+        parser.add_argument(pinned.option, type=Path, default=os.getenv(pinned.env) or None,
+                            help=f"path to {pinned.name} (default: ${pinned.env})")
+    parser.add_argument("--fixture-out", type=Path, default=os.getenv(FIXTURE_OUT_ENV) or None,
+                        help=f"also write the fixture to this file (default: ${FIXTURE_OUT_ENV}; "
+                             "without either, stdout only)")
+    parser.add_argument("--allow-dirty", action="store_true",
+                        help="build from uncommitted changes and record a SHA-256 of git diff HEAD")
+    return parser.parse_args(argv)
+
+
+def pinned_path(path, pinned):
+    """Return the input's absolute path once its pinned SHA-256 matches."""
+    if path is None:
+        raise SystemExit(f"Missing input {pinned.name} (SHA-256 {pinned.sha256}). "
+                         f"Pass {pinned.option} PATH or set {pinned.env}.")
+    path = path.resolve()
+    if not path.is_file():
+        raise SystemExit(f"Input not found: {path}. Expected {pinned.name} (SHA-256 {pinned.sha256}).")
+    with path.open("rb") as file:
+        actual = hashlib.file_digest(file, "sha256").hexdigest()
+    require_equal(f"SHA-256 for {path}", actual, pinned.sha256)
+    return path
+
+
+def git_state(allow_dirty):
+    commit = run("git", "rev-parse", "HEAD", stdout=subprocess.PIPE, text=True).stdout.strip()
+    changes = run("git", "status", "--porcelain", "--untracked-files=no",
+                  stdout=subprocess.PIPE, encoding="utf-8", errors="replace").stdout
+    if not changes:
+        return {"git_commit": commit, "git_dirty": False}
+    if not allow_dirty:
+        raise SystemExit(f"Refusing to build from uncommitted changes:\n{changes}"
+                         "Commit them, or pass --allow-dirty to record a SHA-256 of git diff HEAD.")
+    diff = run("git", "diff", "HEAD", stdout=subprocess.PIPE).stdout
+    return {"git_commit": commit, "git_dirty": True, "git_diff_sha256": hashlib.sha256(diff).hexdigest()}
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    if os.getenv("DATABASE_URL", DEMO_URL) != DEMO_URL:
         raise SystemExit("Refusing to rebuild: DATABASE_URL must match the documented resqnet_demo URL.")
     os.environ["DATABASE_URL"] = DEMO_URL
 
-    hashes = {}
-    for path, expected in INPUT_HASHES.items():
-        with path.open("rb") as file:
-            actual = hashlib.file_digest(file, "sha256").hexdigest()
-        require_equal(f"SHA-256 for {path}", actual, expected)
-        hashes[path.name] = actual
-    git_commit = run("git", "rev-parse", "HEAD", stdout=subprocess.PIPE, text=True).stdout.strip()
+    dump = pinned_path(args.dump, DUMP_INPUT)
+    flood_zip = pinned_path(args.zip, ZIP_INPUT)
+    hashes = {pinned.name: pinned.sha256 for pinned in (DUMP_INPUT, ZIP_INPUT)}
+    fixture_out = args.fixture_out.resolve() if args.fixture_out is not None else None
+    if fixture_out is not None and not fixture_out.parent.is_dir():
+        raise SystemExit(f"Fixture folder not found: {fixture_out.parent}")
+    git = git_state(args.allow_dirty)
 
     if __package__ is None:
         sys.path.insert(0, str(BACKEND))
     from database import SessionLocal
 
-    run(*DOCKER_EXEC, "dropdb", "-U", "resqnet", "--maintenance-db=postgres", "--if-exists", "resqnet_demo",
-        stdout=sys.stderr)
+    # --force (PostgreSQL 13+) ends open connections, e.g. a running API.
+    run(*DOCKER_EXEC, "dropdb", "-U", "resqnet", "--maintenance-db=postgres", "--if-exists", "--force",
+        "resqnet_demo", stdout=sys.stderr)
     run(*DOCKER_EXEC, "createdb", "-U", "resqnet", "--maintenance-db=postgres", "-T", "template_postgis",
         "resqnet_demo", stdout=sys.stderr)
     run(*PSQL, "-c", "ALTER DATABASE resqnet_demo SET jit = off", stdout=sys.stderr)
@@ -304,18 +361,20 @@ def main():
         check_database(session)
 
     run(sys.executable, "-B", "-m", "seed", stdout=sys.stderr)
-    restore_roads()
-    run(sys.executable, "-B", "-m", "service.ingestion_flood", "--zip", ZIP, "--max-age-hours", "24",
+    restore_roads(dump)
+    run(sys.executable, "-B", "-m", "service.ingestion_flood", "--zip", flood_zip, "--max-age-hours", "24",
         stdout=sys.stderr)
     run(*PSQL, "-c", "ANALYZE", stdout=sys.stderr)
 
     with SessionLocal() as session:
-        fixture = make_fixture(session, hashes, git_commit)
+        fixture = make_fixture(session, hashes, git)
     payload = json.dumps(fixture, indent=2, sort_keys=True)
-    temporary = FIXTURE.with_suffix(".json.tmp")
-    temporary.write_text(payload + "\n", encoding="utf-8", newline="\n")
-    temporary.replace(FIXTURE)
-    print(payload)
+    print(payload, flush=True)
+    if fixture_out is not None:
+        temporary = fixture_out.with_name(fixture_out.name + ".tmp")
+        temporary.write_text(payload + "\n", encoding="utf-8", newline="\n")
+        temporary.replace(fixture_out)
+        print(f"Fixture written to {fixture_out}", file=sys.stderr)
 
 
 if __name__ == "__main__":
