@@ -1,5 +1,6 @@
 import { AuthProvider, useAuth } from './context/AuthContext'
 import AuthForm from './components/AuthForm'
+import './style.css'
 import './App.css'
 
 function AppContent() {

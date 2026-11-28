@@ -62,13 +62,25 @@ export default function AuthForm() {
         </label>
 
         {mode === 'register' && (
-          <label className="auth-field">
+          <div className="auth-field">
             <span>Role</span>
-            <select value={role} onChange={(e) => setRole(e.target.value)}>
-              <option value="mobile_user">Mobile User</option>
-              <option value="dispatcher">Dispatcher</option>
-            </select>
-          </label>
+            <div className="role-group">
+              <button
+                type="button"
+                className={`role-btn ${role === 'mobile_user' ? 'active' : ''}`}
+                onClick={() => setRole('mobile_user')}
+              >
+                Mobile User
+              </button>
+              <button
+                type="button"
+                className={`role-btn ${role === 'dispatcher' ? 'active' : ''}`}
+                onClick={() => setRole('dispatcher')}
+              >
+                Dispatcher
+              </button>
+            </div>
+          </div>
         )}
 
         <button type="submit" className="auth-submit" disabled={submitting}>
