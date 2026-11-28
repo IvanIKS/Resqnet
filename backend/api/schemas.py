@@ -40,3 +40,26 @@ class EvacuationPointIn(BaseModel):
 class EvacuationPointOut(BaseModel):
     id: int
     name: str | None
+
+
+class RegisterIn(BaseModel):
+    username: str = Field(..., min_length=3, max_length=255)
+    password: str = Field(..., min_length=6, max_length=255)
+    role: str = Field(default="mobile_user", description="UserRole.role: dispatcher or mobile_user")
+
+
+class LoginIn(BaseModel):
+    username: str
+    password: str
+
+
+class UserOut(BaseModel):
+    id: int
+    username: str
+    role: str
+
+
+class AuthTokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
