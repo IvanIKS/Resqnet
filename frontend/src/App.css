@@ -232,14 +232,24 @@
 }
 
 .map-auth-btn {
-  padding: 0.3rem 0.6rem;
-  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
   border: 1px solid var(--color-border);
   background: var(--color-surface);
   color: var(--color-text);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+.map-signin-floating {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1000;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 20px -6px var(--color-glass-shadow);
 }
 
 .auth-modal-backdrop {

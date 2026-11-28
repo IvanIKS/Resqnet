@@ -12,26 +12,24 @@ function AppContent() {
 
   return (
     <main className="map-wrapper">
-      <div className="map-user-pill">
-        {user ? (
-          <>
-            <span>
-              {user.username} ({user.role})
-            </span>
-            <button type="button" className="map-auth-btn" onClick={logout}>
-              Sign Out
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            className="map-auth-btn"
-            onClick={() => setShowAuth(true)}
-          >
-            Sign In
+      {user ? (
+        <div className="map-user-pill">
+          <span>
+            {user.username} ({user.role})
+          </span>
+          <button type="button" className="map-auth-btn" onClick={logout}>
+            Sign Out
           </button>
-        )}
-      </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="map-auth-btn map-signin-floating"
+          onClick={() => setShowAuth(true)}
+        >
+          Sign In
+        </button>
+      )}
 
       <MapView selectedPoint={selectedPoint} onSelectPoint={setSelectedPoint} />
 
