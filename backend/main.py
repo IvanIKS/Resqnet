@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from services.registry import init_services
 from database import SessionLocal
 from seed import seed
-from api import auth, disaster, evacuation_point, evacuation_route, field_report, live_map
+from api import auth, disaster, evacuation_point, evacuation_route, live_map, people_estimate, field_report
 from database import init_db
 from services import osnma
 
@@ -31,6 +31,7 @@ app.include_router(evacuation_point.router)
 app.include_router(live_map.router)
 app.include_router(evacuation_route.router)
 app.include_router(field_report.router)
+app.include_router(people_estimate.router)
 
 
 @app.get("/api/health")
