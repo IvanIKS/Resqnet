@@ -7,19 +7,23 @@ given moment, which is how the demo scrubs through a flood in time.
 """
 
 import json
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, exists, func, select, true
+from sqlalchemy import and_, exists, func, or_, select, true, union
 from sqlalchemy.orm import Session
 
 from database import get_session
-from models import SRID, Disaster, DisasterArea, EvacuationPoint, Road, Settlement
+from models import SRID, AnalysisCoverage, Disaster, DisasterArea, EvacuationPoint, Road, Settlement
+from service.ingestion_flood import _require_aware, valid_at
+from services.road_status import BBox, SegmentStatus, road_statuses
 
 router = APIRouter(prefix="/api/map", tags=["map"])
+logger = logging.getLogger(__name__)
 
 
-def _parse_bbox(bbox: str | None):
+def _parse_bbox(bbox: str | None) -> BBox | None:
     if bbox is None:
         return None
     try:
@@ -28,7 +32,7 @@ def _parse_bbox(bbox: str | None):
         raise HTTPException(status_code=400, detail="bbox must be minLon,minLat,maxLon,maxLat")
     if min_lon >= max_lon or min_lat >= max_lat:
         raise HTTPException(status_code=400, detail="bbox min must be less than max")
-    return func.ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, SRID)
+    return min_lon, min_lat, max_lon, max_lat
 
 
 def _feature(geojson: str, properties: dict) -> dict:
@@ -37,22 +41,21 @@ def _feature(geojson: str, properties: dict) -> dict:
 
 @router.get("/live")
 def live_map(
-    at: datetime | None = Query(None, description="Show the situation at this moment (ISO 8601). Defaults to now."),
+    at: datetime | None = Query(None, description="Replay time (ISO 8601 with Z or offset). Defaults to now."),
     disaster_id: int | None = Query(None, description="Only this disaster."),
     bbox: str | None = Query(None, description="minLon,minLat,maxLon,maxLat - only what is visible on the map."),
     session: Session = Depends(get_session),
 ):
-    moment = at or datetime.now(timezone.utc)
-    if moment.tzinfo is not None:
-        moment = moment.astimezone(timezone.utc).replace(tzinfo=None)
-    envelope = _parse_bbox(bbox)
+    try:
+        moment = _require_aware(at or datetime.now(timezone.utc), "at").astimezone(timezone.utc)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="at must include Z or a UTC offset") from exc
+    bounds = _parse_bbox(bbox)
+    envelope = func.ST_MakeEnvelope(*bounds, SRID) if bounds is not None else None
 
-    active = and_(
-        DisasterArea.disaster_id == Disaster.id,
-        Disaster.creation_time <= moment,
-    )
+    active = or_(valid_at(DisasterArea, moment), DisasterArea.observed_at.is_(None))
     if disaster_id is not None:
-        active = and_(active, Disaster.id == disaster_id)
+        active = and_(active, DisasterArea.disaster_id == disaster_id)
 
     def in_view(geom):
         return geom.op("&&")(envelope) if envelope is not None else true()
@@ -65,28 +68,41 @@ def live_map(
     areas = session.execute(
         select(
             DisasterArea.id, DisasterArea.name, Disaster.id, Disaster.name,
-            Disaster.creation_time, func.ST_AsGeoJSON(DisasterArea.area),
+            DisasterArea.observed_at, func.ST_AsGeoJSON(DisasterArea.area),
         )
         .join(Disaster, DisasterArea.disaster_id == Disaster.id)
         .where(active, in_view(DisasterArea.area))
         .order_by(DisasterArea.id)
     ).all()
-    for area_id, area_name, dis_id, dis_name, created, geom in areas:
+    for area_id, area_name, dis_id, dis_name, observed_at, geom in areas:
         features.append(_feature(geom, {
             "kind": "disaster_area", "id": area_id, "name": area_name,
             "disaster_id": dis_id, "disaster_name": dis_name,
-            "since": created.isoformat() if created else None,
+            "since": observed_at.isoformat() if observed_at is not None else None,
+            "untimed": observed_at is None,
         }))
 
-    flooded_roads = 0
     roads = session.execute(
-        select(Road.id, func.ST_AsGeoJSON(Road.geom), touches_water(Road.geom))
+        select(Road.id, func.ST_AsGeoJSON(Road.geom))
         .where(in_view(Road.geom))
         .order_by(Road.id)
     ).all()
-    for road_id, geom, flooded in roads:
-        flooded_roads += bool(flooded)
-        features.append(_feature(geom, {"kind": "road", "id": road_id, "flooded": bool(flooded)}))
+    counts = {"closed": 0, "mapped_option": 0, "unknown": 0}
+    try:
+        # Known hazards still apply if the displayed disaster layer is filtered.
+        statuses = road_statuses(session, moment, bbox=bounds)
+    except Exception:
+        logger.exception("Live map road status computation failed")
+        session.rollback()
+        statuses = {}
+    unavailable = SegmentStatus("unknown", "error")
+    for road_id, geom in roads:
+        status = statuses.get(road_id, unavailable)
+        counts[status.route_status] += 1
+        features.append(_feature(geom, {
+            "kind": "road", "id": road_id, "flooded": status.route_status == "closed",
+            "route_status": status.route_status, "reason": status.reason,
+        }))
 
     points = session.execute(
         select(EvacuationPoint.id, EvacuationPoint.name, func.ST_AsGeoJSON(EvacuationPoint.geom),
@@ -114,15 +130,24 @@ def live_map(
             "population": population, "affected": bool(affected),
         }))
 
+    observations = union(*(
+        select(model.source, model.observed_at, model.valid_until).where(valid_at(model, moment))
+        for model in (DisasterArea, AnalysisCoverage)
+    )).order_by("observed_at", "valid_until", "source")
     return {
         "type": "FeatureCollection",
         "features": features,
         "summary": {
-            "at": moment.isoformat() + "Z",
+            "at": moment.isoformat().replace("+00:00", "Z"),
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "disaster_areas": len(areas),
-            "roads_flooded": flooded_roads,
+            "roads_flooded": counts["closed"],
             "roads_total": len(roads),
+            "roads_by_status": counts,
+            "observations": [
+                {"source": source, "observed_at": start.isoformat(), "valid_until": end.isoformat()}
+                for source, start, end in session.execute(observations)
+            ],
             "evacuation_points_in_danger": sum(1 for p in points if p[3]),
             "settlements_affected": sum(1 for s in settlements if s[4]),
             "people_affected": affected_people,

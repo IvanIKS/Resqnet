@@ -1,47 +1,62 @@
-"""Tests run against a throwaway PostGIS database next to the dev one.
-
-Start the stack first (docker compose up -d db), then: pytest
-"""
+"""Lazy PostGIS fixtures for integration tests using throwaway databases."""
 
 import os
-"""Make backend/ importable (``models``, ``service.*``) however pytest is started."""
-
-import sys
-from pathlib import Path
+import uuid
+from contextlib import contextmanager
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import OperationalError
 
-ADMIN_URL = os.getenv("TEST_ADMIN_URL", "postgresql+psycopg2://resqnet:resqnet@localhost:5432/resqnet")
-TEST_DB = "resqnet_test"
-
-admin = create_engine(ADMIN_URL, isolation_level="AUTOCOMMIT")
-with admin.connect() as conn:
-    if not conn.scalar(text("SELECT 1 FROM pg_database WHERE datname = :n"), {"n": TEST_DB}):
-        conn.execute(text(f"CREATE DATABASE {TEST_DB}"))
-admin.dispose()
-
-os.environ["DATABASE_URL"] = ADMIN_URL.rsplit("/", 1)[0] + "/" + TEST_DB
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from database import engine  # noqa: E402
-from models import Base  # noqa: E402
-
-with engine.connect() as conn:
-    conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
-    conn.commit()
+import database
+from models import Base
 
 
-@pytest.fixture()
-def client():
+@pytest.fixture(scope="session")
+def scratch_database():
+    server = make_url(os.getenv("TEST_ADMIN_URL", database.DATABASE_URL))
+
+    @contextmanager
+    def open_database():
+        admin = create_engine(server.set(database="postgres"), isolation_level="AUTOCOMMIT",
+                              connect_args={"connect_timeout": 3})
+        name = f"resqnet_test_{uuid.uuid4().hex[:10]}"
+        try:
+            with admin.connect() as conn:
+                conn.execute(text(f'CREATE DATABASE "{name}"'))
+        except OperationalError:
+            admin.dispose()
+            pytest.skip(f"PostGIS server unavailable at {server.host}:{server.port}")
+
+        engine = create_engine(server.set(database=name))
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
+            yield engine
+        finally:
+            engine.dispose()
+            with admin.connect() as conn:
+                conn.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+            admin.dispose()
+
+    return open_database
+
+
+@pytest.fixture(scope="module")
+def api_engine(scratch_database):
+    with scratch_database() as engine:
+        yield engine
+
+
+@pytest.fixture
+def postgis_client(api_engine, monkeypatch):
     from fastapi.testclient import TestClient
 
-    from main import app
+    import main
 
-    Base.metadata.drop_all(bind=engine)
-    with TestClient(app) as c:
-        yield c
-
-BACKEND = str(Path(__file__).resolve().parents[1])
-if BACKEND not in sys.path:
-    sys.path.insert(0, BACKEND)
+    Base.metadata.drop_all(bind=api_engine)
+    monkeypatch.setitem(database.SessionLocal.kw, "bind", api_engine)
+    monkeypatch.setattr(main, "init_db", lambda: database.init_db(api_engine))
+    with TestClient(main.app) as client:
+        yield client
