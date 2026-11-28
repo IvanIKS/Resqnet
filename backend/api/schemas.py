@@ -63,3 +63,18 @@ class AuthTokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserOut
+
+
+class EvacuationRouteIn(BaseModel):
+    lat: float = Field(..., ge=-90, le=90, description="Latitude (WGS84)")
+    lon: float = Field(..., ge=-180, le=180, description="Longitude (WGS84)")
+
+
+class EvacuationRouteOut(BaseModel):
+    status: str
+    in_disaster_area: bool
+    road_ids: list[int]
+    distance_meters: float | None = None
+    target_point: EvacuationPointOut | None = None
+    candidate_lat: float | None = None
+    candidate_lon: float | None = None

@@ -1,34 +1,9 @@
-.app {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 3rem 1.5rem;
-  text-align: center;
+.map-wrapper {
+  height: 100vh;
+  width: 100vw;
 }
 
-h1 {
-  margin-bottom: 0.25rem;
-}
-
-.status {
-  margin-top: 2rem;
-}
-
-.badge {
-  padding: 0.15rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  background: #ddd;
-  color: #333;
-}
-
-.badge.online {
-  background: #d4edda;
-  color: #155724;
-}
-
-.badge.offline,
-.badge.error {
-  background: #f8d7da;
-  color: #721c24;
+.map-container {
+  height: 100%;
+  width: 100%;
 }

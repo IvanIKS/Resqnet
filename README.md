@@ -83,6 +83,28 @@ push-повідомлення, SMS тощо). Склад активних нот
 з `lifespan` у [`backend/main.py`](backend/main.py)). Розширення PostGIS
 вмикається образом `postgis/postgis` під час ініціалізації бази.
 
+### Map data: flood and roads (EMSR444 AOI02)
+
+`init_db()` also upgrades a database created by an older `models.py` in place
+(missing nullable columns and indexes), so an old `pgdata` volume keeps
+working. Load the data from `backend/`:
+
+```bash
+export EMSR_ZIP=/path/to/EMSR444_AOI02_DEL_PRODUCT_r1_RTP01_v1_vector.zip
+python -m service.ingestion_flood     # flood -> disaster_areas, AOI + Not Analysed -> analysis_coverage
+python -m service.ingestion_roads     # OSM roads -> roads (cache dir: OSM_CACHE_DIR)
+```
+
+Flood data are append-only: an import adds rows and never overwrites
+earlier ones, and importing the same product again writes nothing. Every row
+has `source`, `product`, `observed_at` (image time, not load time),
+`valid_until` (24 h after the image; `SATELLITE_MAX_AGE_HOURS` can shorten it)
+and `ingested_at`. `service.ingestion_flood.observations_valid_at(session, at)`
+returns what counts at moment `at` (`observed_at <= at < valid_until`); pass
+`2020-06-26T12:00Z` to replay EMSR444. Whatever it does not return is unknown,
+never safe. Details:
+[`backend/SCHEMA_PROPOSAL_disaster_areas.md`](backend/SCHEMA_PROPOSAL_disaster_areas.md).
+
 ## Запуск
 
 Увесь стек піднімається через Docker Compose:
@@ -102,3 +124,39 @@ docker compose up -d --build
 
 Бекенд під'єднується до бази за змінною середовища `DATABASE_URL`
 (значення для Compose задано в [`docker-compose.yml`](docker-compose.yml)).
+
+## Маршрутизація евакуації
+
+Ендпоінт `POST /evacuation-route` розраховує маршрут евакуації для координат `(lat, lon)`:
+- Якщо користувач у `DisasterArea`, алгоритм Дейкстры шукає найкоротший шлях по дорогах (`Road`) до `EvacuationPoint`, уникаючи затоплених ділянок (дозволяється старт із найближчої дороги, щоб вийти з поточної точки).
+- Якщо безпечного шляху немає, повертається найближча `EvacuationPoint` диспетчера або кандидат (найближчий незатоплений кінець дороги).
+
+Детальніше про архітектурні рішення див. у [`brain/`](brain/README.md).
+
+## Карта в реальному часі: `GET /api/map/live`
+
+Один GeoJSON `FeatureCollection` з усім, що потрібно мапі диспетчера. У кожного об'єкта є `properties.kind`:
+
+| kind | геометрія | що в properties |
+|------|-----------|-----------------|
+| `disaster_area` | Polygon | `name`, `disaster_id`, `disaster_name`, `since` |
+| `road` | LineString | `flooded` - дорога перетинає воду (`ST_Intersects`) |
+| `evacuation_point` | Point | `name`, `in_danger` - точка всередині зони лиха |
+| `settlement` | Polygon | `name`, `population`, `affected` |
+
+Блок `summary` - цифри для панелі: скільки доріг затоплено, скільки людей у зоні, які точки евакуації під загрозою.
+
+Параметри:
+- `at` - стан на певний момент (ISO 8601). Для демо: прокручуємо повінь у часі.
+- `disaster_id` - лише одне лихо.
+- `bbox=minLon,minLat,maxLon,maxLat` - лише те, що видно на екрані.
+
+Фронт оновлює мапу, запитуючи ендпоінт раз на кілька секунд.
+
+## Тести
+
+Тести ганяються в контейнері, бо на Windows порт 5432 часто зайнятий локальним PostgreSQL:
+
+```
+docker compose run --rm -e TEST_ADMIN_URL=postgresql+psycopg2://resqnet:resqnet@db:5432/resqnet backend sh -c "pip install -q -r requirements-dev.txt && python -m pytest -q tests"
+```
