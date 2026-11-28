@@ -1,23 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import MapView from './components/MapView'
 import './App.css'
 
 export default function App() {
-  const [status, setStatus] = useState('checking…')
-
-  // Ping the backend so we can see the dev proxy is wired up.
-  useEffect(() => {
-    fetch('/api/health')
-      .then((res) => (res.ok ? setStatus('online') : setStatus('error')))
-      .catch(() => setStatus('offline'))
-  }, [])
+  const [selectedPoint, setSelectedPoint] = useState(null)
 
   return (
-    <main className="app">
-      <h1>ResQNet</h1>
-      <p>Disaster response coordination — flood operations.</p>
-      <p className="status">
-        Backend: <span className={`badge ${status}`}>{status}</span>
-      </p>
+    <main className="map-wrapper">
+      <MapView selectedPoint={selectedPoint} onSelectPoint={setSelectedPoint} />
     </main>
   )
 }
