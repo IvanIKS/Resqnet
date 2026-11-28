@@ -9,6 +9,8 @@
   - `POST /evacuation-route` accepting `{ lat, lon, at? }`.
   - Two-pass Dijkstra over the cached `Road` graph: `mapped_option` first, then `unknown`, never `closed`; the route is rated by its weakest segment. See [`evacuation-routing.md`](../03-architecture/evacuation-routing.md).
 - **Road status at a moment** (`backend/services/road_status.py`): `closed` / `mapped_option` / `unknown` with a reason, shared by the live map and the route.
+- **People in flood zones** (`backend/api/people_estimate.py`, `backend/services/people_estimate.py`):
+  - `GET /api/disasters/{id}/people-estimate?at=`: people per flood zone and in total, weighted by the flooded share of each settlement. See [`live-map-and-people-estimate.md`](../03-architecture/live-map-and-people-estimate.md).
 - **Ingestion, Alarm, Notification & Live Map**:
   - Flood & road ingestion (`backend/service/ingestion_flood.py`, `ingestion_roads.py`), live map API (`backend/api/live_map.py`), disaster & evacuation point CRUD.
 
